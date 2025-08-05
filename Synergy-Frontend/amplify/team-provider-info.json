@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-synergyfrontend-dev-d57f0-authRole",
+      "UnauthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-d57f0-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-d57f0-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-synergyfrontend-dev-d57f0-deployment",
+      "UnauthRoleName": "amplify-synergyfrontend-dev-d57f0-unauthRole",
+      "StackName": "amplify-synergyfrontend-dev-d57f0",
+      "StackId": "arn:aws:cloudformation:us-east-1:768124195760:stack/amplify-synergyfrontend-dev-d57f0/67fd8100-7237-11f0-95c2-0affe92e5ef3",
+      "AmplifyAppId": "d2fjsliszpnqh4"
+    },
+    "categories": {
+      "auth": {
+        "synergyfrontendebed1fdf": {}
+      },
+      "storage": {
+        "passportsaver": {}
+      }
+    }
+  }
+}
