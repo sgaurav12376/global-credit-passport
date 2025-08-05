@@ -27,7 +27,7 @@ function AppContent({ signOut, user }) {
       }).result;
 
       // After upload, notify backend
-      const backendApiUrl = "http://18.208.137.85:8000/upload"; // 🔁 Replace this with your backend URL
+      const backendApiUrl = "https://d094gqwz7a.execute-api.us-east-1.amazonaws.com/dev/upload"; // 🔁 Replace this with your backend URL
       await fetch(backendApiUrl, {
         method: 'POST',
         headers: {
