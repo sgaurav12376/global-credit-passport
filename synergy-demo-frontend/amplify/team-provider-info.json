@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-synergyfrontend-dev-2977c-authRole",
+      "UnauthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-2977c-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-2977c-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-synergyfrontend-dev-2977c-deployment",
+      "UnauthRoleName": "amplify-synergyfrontend-dev-2977c-unauthRole",
+      "StackName": "amplify-synergyfrontend-dev-2977c",
+      "StackId": "arn:aws:cloudformation:us-east-1:768124195760:stack/amplify-synergyfrontend-dev-2977c/f8e072e0-7165-11f0-bee4-0affcd477a9d",
+      "AmplifyAppId": "d1bfch6j1mfcik"
+    },
+    "categories": {
+      "auth": {
+        "synergyfrontend673970db": {}
+      },
+      "storage": {
+        "Synergy2025": {}
+      }
+    }
+  }
+}
