@@ -31,7 +31,7 @@ export default function UploadPage({ user, setUser }) {
         contentType: file.type,
       });
 
-      const backendApiUrl = ' http://127.0.0.1:8000/upload';
+      const backendApiUrl = 'https://d094gqwz7a.execute-api.us-east-1.amazonaws.com/dev';
 
       await fetch(backendApiUrl, {
         method: 'POST',
