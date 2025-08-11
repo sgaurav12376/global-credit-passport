@@ -21,21 +21,20 @@ A modern React-based frontend for the Synergy platform, integrated with AWS Ampl
 ```bash
 git clone https://github.com/<your-org>/<repo-name>.git
 cd <repo-name>
----
+```
 
 
 
 ### 2️⃣ Install dependencies
 ```bash
 npm install
----
+```
 
 
 ### 3️⃣ Start the development server
 ```bash
 npm start
-
----
+```
 
 
 ### This will run the app locally at:
