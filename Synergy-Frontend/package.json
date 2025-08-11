@@ -3,30 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@aws-amplify/auth": "^6.14.0",
-    "@aws-amplify/storage": "^6.9.4",
+    "@aws-amplify/auth": "^6.15.0",
+    "@aws-amplify/storage": "^6.9.5",
     "@aws-amplify/ui-react": "^6.11.2",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.6.4",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "aws-amplify": "^6.15.4",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-scripts": "5.0.1",
+    "aws-amplify": "^6.15.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.8.0",
     "web-vitals": "^2.1.4"
   },
+  "devDependencies": {
+    "copyfiles": "^2.4.1",
+    "react-scripts": "^5.0.1"
+  },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
+    "copy-config": "copyfiles -f src/aws-exports.js src/synergy_resources/credit_app/config/",
+    "start": "npm run copy-config && react-scripts start",
+    "build": "npm run copy-config && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
   },
   "browserslist": {
     "production": [

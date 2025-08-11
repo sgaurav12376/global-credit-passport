@@ -1,22 +1,32 @@
 {
   "dev": {
     "awscloudformation": {
-      "AuthRoleName": "amplify-synergyfrontend-dev-d57f0-authRole",
-      "UnauthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-d57f0-unauthRole",
-      "AuthRoleArn": "arn:aws:iam::768124195760:role/amplify-synergyfrontend-dev-d57f0-authRole",
+      "AuthRoleName": "amplify-creditapp-dev-1d1b6-authRole",
+      "UnauthRoleArn": "arn:aws:iam::768124195760:role/amplify-creditapp-dev-1d1b6-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::768124195760:role/amplify-creditapp-dev-1d1b6-authRole",
       "Region": "us-east-1",
-      "DeploymentBucketName": "amplify-synergyfrontend-dev-d57f0-deployment",
-      "UnauthRoleName": "amplify-synergyfrontend-dev-d57f0-unauthRole",
-      "StackName": "amplify-synergyfrontend-dev-d57f0",
-      "StackId": "arn:aws:cloudformation:us-east-1:768124195760:stack/amplify-synergyfrontend-dev-d57f0/67fd8100-7237-11f0-95c2-0affe92e5ef3",
-      "AmplifyAppId": "d2fjsliszpnqh4"
+      "DeploymentBucketName": "amplify-creditapp-dev-1d1b6-deployment",
+      "UnauthRoleName": "amplify-creditapp-dev-1d1b6-unauthRole",
+      "StackName": "amplify-creditapp-dev-1d1b6",
+      "StackId": "arn:aws:cloudformation:us-east-1:768124195760:stack/amplify-creditapp-dev-1d1b6/7e3feb20-761e-11f0-a78c-0ef896ec8bf3",
+      "AmplifyAppId": "d3o7ey53lojj4d",
+      "AuthTriggerTemplateURL": "https://s3.amazonaws.com/amplify-creditapp-dev-1d1b6-deployment/amplify-cfn-templates/auth/auth-trigger-cloudformation-template.json"
     },
     "categories": {
       "auth": {
-        "synergyfrontendebed1fdf": {}
+        "creditappe3cb92ec": {}
       },
       "storage": {
-        "passportsaver": {}
+        "userdata": {}
+      },
+      "function": {
+        "creditappe3cb92ecCustomMessage": {
+          "REDIRECTURL": "http://localhost:3000/signin",
+          "EMAILSUBJECT": "Confirm your Credit App account",
+          "EMAILMESSAGE": "Hello,Thank you for signing up with [Your App Nam",
+          "deploymentBucketName": "amplify-creditapp-dev-1d1b6-deployment",
+          "s3Key": "amplify-builds/creditappe3cb92ecCustomMessage-47613061375a6f504a76-build.zip"
+        }
       }
     }
   }

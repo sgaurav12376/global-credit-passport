@@ -1,15 +1,30 @@
 {
   "auth": {
-    "synergyfrontendebed1fdf": {
+    "creditappe3cb92ec": {
       "customAuth": false,
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "attributes": [
+            "Arn",
+            "Name"
+          ],
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage",
+          "triggerProvider": "Cognito"
+        }
+      ],
       "frontendAuthConfig": {
         "mfaConfiguration": "OFF",
         "mfaTypes": [
           "SMS"
         ],
         "passwordProtectionSettings": {
-          "passwordPolicyCharacters": [],
+          "passwordPolicyCharacters": [
+            "REQUIRES_LOWERCASE",
+            "REQUIRES_UPPERCASE",
+            "REQUIRES_NUMBERS",
+            "REQUIRES_SYMBOLS"
+          ],
           "passwordPolicyMinLength": 8
         },
         "signupAttributes": [
@@ -28,8 +43,57 @@
       "service": "Cognito"
     }
   },
+  "function": {
+    "creditappe3cb92ecCustomMessage": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    }
+  },
+  "parameters": {
+    "AMPLIFY_function_creditappe3cb92ecCustomMessage_EMAILMESSAGE": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_creditappe3cb92ecCustomMessage_EMAILSUBJECT": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_creditappe3cb92ecCustomMessage_REDIRECTURL": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_creditappe3cb92ecCustomMessage_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_creditappe3cb92ecCustomMessage_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "creditappe3cb92ecCustomMessage"
+        }
+      ]
+    }
+  },
   "storage": {
-    "passportsaver": {
+    "userdata": {
       "dependsOn": [],
       "providerPlugin": "awscloudformation",
       "service": "S3"
