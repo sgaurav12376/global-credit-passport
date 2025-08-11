@@ -40,6 +40,31 @@ npm start
 ### This will run the app locally at:
 ```bash
 http://localhost:3000
+```
+
+
+## Deployment with AWS Amplify
+### 1. Install Amplify CLI (if not already installed):
+```bash
+npm install -g @aws-amplify/cli
+```
+
+
+### 2. Initialize Amplify:
+```bash
+amplify init
+```
+
+
+### 3. Deploy to Amplify Hosting:
+```bash
+amplify push
+```
+
+
+
+
+
 
 
 
