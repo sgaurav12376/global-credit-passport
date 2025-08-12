@@ -1,2 +1,2 @@
-![Banner]([https://your-image-link.com/image.png](https://drive.google.com/file/d/1NknsgKq9h-Pg1djCmcGgK3Z4y9fKNOCN/view?usp=drive_link))
+![Banner](https://drive.google.com/uc?export=view&id=1NknsgKq9h-Pg1djCmcGgK3Z4y9fKNOCN)
 # global-credit-score-master
