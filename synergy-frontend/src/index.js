@@ -1,3 +1,3 @@
-import './synergy_resources/credit_app/start/index.js';
+import './synergy_resources/credit_app/main/index.js';
 
 
