@@ -26,8 +26,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, OPTIONS, etc)
-    allow_headers=["*"],
+    allow_methods=["POST","OPTIONS"],  # Allow all methods (GET, POST, OPTIONS, etc)
+    allow_headers=["content-type"],
 )
 
 # Register routers
