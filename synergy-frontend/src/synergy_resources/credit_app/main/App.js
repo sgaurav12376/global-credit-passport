@@ -4,7 +4,7 @@ import { Amplify } from 'aws-amplify';
 import { getCurrentUser } from '@aws-amplify/auth';
 import rawConfig from '../config/aws-exports';
 
-import LoginPage from '../pages/login_page';
+import LoginPage from '../pages/Login';
 import RegisterPage from '../pages/register_page';
 import UploadPage from '../pages/upload_page';
 
