@@ -87,7 +87,7 @@ export default function RegisterPage() {
           <button type="submit" style={buttonStyle}>Register</button>
         </form>
         <div style={footerStyle}>
-          Already have an account? <Link to="/login" style={linkStyle}>Log In</Link>
+          Already have an account? <Link to="/Login" style={linkStyle}>Log In</Link>
         </div>
       </div>
     </div>

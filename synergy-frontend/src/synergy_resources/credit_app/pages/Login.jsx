@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Auth } from 'aws-amplify';
+import * as Auth from '@aws-amplify/auth';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -72,7 +72,7 @@ const Login = () => {
         </form>
 
         <div style={styles.footerNote}>
-          Don’t have an account? <a href="credit-signup.html" style={styles.link}>Sign Up</a>
+          Don’t have an account? <a href="/register" style={styles.link}>Sign Up</a>
         </div>
       </div>
     </div>
