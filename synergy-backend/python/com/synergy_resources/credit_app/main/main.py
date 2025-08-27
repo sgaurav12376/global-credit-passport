@@ -6,35 +6,37 @@ from tortoise.contrib.fastapi import register_tortoise
 from dotenv import load_dotenv
 import os
 
-# Import router with full package path
+# Routers
+from com.synergy_resources.credit_app.modules.Auth.signup.routes import router as signup_router
+from com.synergy_resources.credit_app.modules.Auth.signin.routes import router as signin_router
 from com.synergy_resources.credit_app.modules.upload_service.routes import router as upload_router
-# from com.synergy_resources.credit_app.modules.login_service.routes import router as login_router  # example future
 
-load_dotenv()  # Load .env vars
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-app = FastAPI()
+app = FastAPI(title="Synergy Backend API")
 
-# CORS - allow your frontend
+# Allow React frontend
 origins = [
     "http://localhost:3000",
-    "http://192.168.56.1:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["POST","OPTIONS"],  # Allow all methods (GET, POST, OPTIONS, etc)
-    allow_headers=["content-type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Register routers
-app.include_router(upload_router)
-# app.include_router(login_router)  # uncomment when login router ready
+app.include_router(signup_router, prefix="/auth", tags=["Signup"])
+app.include_router(signin_router, prefix="/auth", tags=["Signin"])
+app.include_router(upload_router, prefix="/upload", tags=["Upload"])
 
-# Register DB with Tortoise ORM
+# Register DB
 register_tortoise(
     app,
     db_url=DATABASE_URL,

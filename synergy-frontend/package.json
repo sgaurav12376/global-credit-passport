@@ -3,10 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@aws-amplify/auth": "^6.15.0",
     "@aws-amplify/storage": "^6.9.5",
-    "@aws-amplify/ui-react": "^6.11.2",
-    "aws-amplify": "^6.15.5",
+    "axios": "^1.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.8.0",

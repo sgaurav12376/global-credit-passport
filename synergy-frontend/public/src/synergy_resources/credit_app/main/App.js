@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 
 // Pages
-import LoginPage from '../pages/Auth/signin/Login.js';
+import LoginPage from '../pages/Auth/Login.js';
 import RegisterChoice from '../pages/Auth/signup/RegisterOptions.js';
 import ManualRegister from '../pages/Auth/signup/ManualRegister.js';
 import AutoRegister from '../pages/Auth/signup/AutoRegister.js';
@@ -14,7 +14,7 @@ export default function App() {
 
   // Check user session on mount
   useEffect(() => {
-    axios.get("http://localhost:8000/auth/me", { withCredentials: true })
+    axios.get("http://localhost:8001/auth/me", { withCredentials: true })
       .then(res => setUser(res.data))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -35,26 +35,26 @@ export default function App() {
 
         {/* Register Choice */}
         <Route
-          path="/RegisterOptions"
+          path="/register"
           element={!user ? <RegisterChoice /> : <Navigate to="/login" replace />}
         />
 
         {/* Manual Register */}
         <Route
-          path="/RegisterOptions/ManualRegister"
+          path="/register/manual"
           element={!user ? <ManualRegister /> : <Navigate to="/login" replace />}
         />
 
         {/* Automatic Register */}
         <Route
-          path="/RegisterOptions/AutoRegister"
+          path="/register/auto"
           element={!user ? <AutoRegister /> : <Navigate to="/login" replace />}
         />
 
         {/* Dashboard */}
         <Route
-          path="dashboard/CreditDashboard"
-          element={user ? <CreditDashboard user={user} /> : <Navigate to="/CreditDashboard" replace />}
+          path="/dashboard"
+          element={user ? <CreditDashboard user={user} /> : <Navigate to="/login" replace />}
         />
 
         {/* Default redirect */}
