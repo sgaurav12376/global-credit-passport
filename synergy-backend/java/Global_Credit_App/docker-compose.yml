@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: synergydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./import:/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d synergydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [global-credit-network]
+
+  login-service:
+    build: ./login-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/synergydb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: admin
+    networks: [global-credit-network]
+
+  register-service:
+    build: ./register-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/synergydb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: admin
+    networks: [global-credit-network]
+
+  countrydetails-service:
+    build: ./countrydetails-service
+    ports:
+      - "8083:8083"
+    networks: [global-credit-network]
+
+  data-service:
+    # IMPORTANT: build from repo root so Maven sees the parent POM
+    build:
+      context: .
+      dockerfile: data-service/Dockerfile
+    environment:
+      - DB_URL=jdbc:postgresql://postgres:5432/synergydb
+      - DB_USER=postgres
+      - DB_PASS=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8085:8085"
+    networks: [global-credit-network]
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - login-service
+      - register-service
+      - countrydetails-service
+      - data-service
+    networks: [global-credit-network]
+
+volumes:
+  postgres_data:
+
+networks:
+  global-credit-network:
+    driver: bridge
