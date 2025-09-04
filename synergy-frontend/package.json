@@ -1,37 +1,29 @@
 {
-  "name": "doc-upload-app",
-  "version": "0.1.0",
+  "name": "dashboard",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
   "dependencies": {
-    "@aws-amplify/storage": "^6.9.5",
-    "axios": "^1.11.0",
-    "jwt-decode": "^4.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^7.8.0",
-    "web-vitals": "^2.1.4"
+    "react": "^19.1.1",
+    "react-country-flag": "^3.1.0",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.1"
   },
   "devDependencies": {
-    "copyfiles": "^2.4.1",
-    "react-scripts": "^5.0.1"
-  },
-  "scripts": {
-    "copy-config": "copyfiles -f src/aws-exports.js src/synergy_resources/credit_app/config/",
-    "start": "npm run copy-config && react-scripts start",
-    "build": "npm run copy-config && react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "@eslint/js": "^9.33.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "vite": "^7.1.2"
   }
 }
