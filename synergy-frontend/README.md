@@ -1,71 +1,12 @@
-# Synergy Frontend
+# React + Vite
 
-A modern React-based frontend for the Synergy platform, integrated with AWS Amplify for hosting, authentication, and backend API connectivity.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 🚀 Features
-- Responsive React UI
-- AWS Amplify hosting & environment management
-- API integration with Synergy backend
-- Progressive Web App (PWA) support
-- Easy deployment to AWS
+Currently, two official plugins are available:
 
-## 🛠️ Tech Stack
-- **React** (Create React App)
-- **AWS Amplify** (Hosting, Auth, API)
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
----
+## Expanding the ESLint configuration
 
-## 📦 Installation & Setup
-
-### 1️⃣ Clone the repository
-```bash
-git clone https://github.com/<your-org>/<repo-name>.git
-cd <repo-name>
-```
-
-
-
-### 2️⃣ Install dependencies
-```bash
-npm install
-```
-
-
-### 3️⃣ Start the development server
-```bash
-npm start
-```
-
-
-### This will run the app locally at:
-```bash
-http://localhost:3000
-```
-
-
-## Deployment with AWS Amplify
-### 1. Install Amplify CLI (if not already installed):
-```bash
-npm install -g @aws-amplify/cli
-```
-
-
-### 2. Initialize Amplify:
-```bash
-amplify init
-```
-
-
-### 3. Deploy to Amplify Hosting:
-```bash
-amplify push
-```
-
-
-
-
-
-
-
-
-
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
