@@ -1,31 +1,67 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from "jwt-decode"; 
 
-const Login = () => {
+const Login = ({ setUser }) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const usernameOrPhone = email || phone;
-    if (!usernameOrPhone) {
-      setMessage('Please enter email or phone number');
+    if (!email && !phone) {
+      setMessage("Please enter email or phone number");
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:3000/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: usernameOrPhone, password }),
+      let payload = { password };
+      if (email) payload.email = email;
+      if (phone) payload.phone = phone;
+
+      const response = await fetch("http://localhost:8000/auth/signin/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Login failed");
+      }
+
       const data = await response.json();
-      setMessage(data.message);
+      setMessage("Login successful ✅");
+
+      // Save tokens
+      if (data.access_token) {
+        localStorage.setItem("accessToken", data.access_token);
+      }
+      if (data.id_token) {
+        localStorage.setItem("idToken", data.id_token);
+
+        // Decode user info
+        const decoded = jwtDecode(data.id_token);
+        console.log("Decoded user:", decoded);
+
+        // Example fields: email, name, phone_number
+        const userInfo = {
+          email: decoded.email,
+          name: decoded.name,
+          phone: decoded.phone_number,
+        };
+
+        setUser(userInfo);
+      }
+
+      // Redirect
+      navigate("/dashboard");
+
     } catch (err) {
-      setMessage('Error connecting to server');
+      setMessage(err.message || "Error connecting to server");
     }
   };
 
@@ -74,12 +110,14 @@ const Login = () => {
         </form>
 
         <div style={styles.footerNote}>
-          Don’t have an account? <a href="RegisterOptions" style={styles.link}>Sign Up</a>
+          Don’t have an account? <a href="/RegisterOptions" style={styles.link}>Sign Up</a>
         </div>
       </div>
     </div>
   );
 };
+
+// keep your styles here...
 
 const styles = {
   body: {

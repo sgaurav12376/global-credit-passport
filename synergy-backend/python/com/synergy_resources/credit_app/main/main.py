@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 import os
 
 # Routers
-from com.synergy_resources.credit_app.modules.Auth.signup.routes import router as signup_router
-from com.synergy_resources.credit_app.modules.Auth.signin.routes import router as signin_router
-from com.synergy_resources.credit_app.modules.upload_service.routes import router as upload_router
+from com.synergy_resources.credit_app.modules.auth.signup_manual.manual_signup_routes import router as man_signup_router
+from com.synergy_resources.credit_app.modules.auth.signin.signin_routes import router as signin_router
+from com.synergy_resources.credit_app.modules.auth.signup_auto.auto_signup_routes import router as auto_signup_router
+
 
 load_dotenv()
 
@@ -17,24 +18,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = FastAPI(title="Synergy Backend API")
 
-# Allow React frontend
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# CORS Middleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Register routers
-app.include_router(signup_router, prefix="/auth", tags=["Signup"])
-app.include_router(signin_router, prefix="/auth", tags=["Signin"])
-app.include_router(upload_router, prefix="/upload", tags=["Upload"])
+app.include_router(man_signup_router, prefix="/auth/signup_manual", tags=["Signup_manual"])
+app.include_router(signin_router, prefix="/auth/signin", tags=["Signin"])
+app.include_router(auto_signup_router, prefix="/auth/signup_auto", tags=["signup_auto"])
 
 # Register DB
 register_tortoise(

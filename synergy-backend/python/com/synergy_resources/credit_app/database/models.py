@@ -3,7 +3,7 @@
 from tortoise.models import Model
 from tortoise import fields
 
-class User(Model):
+class SynergyCreditApp(Model):  # Table name will be "synergy_credit_app"
     id = fields.IntField(pk=True)
     cognito_sub = fields.CharField(max_length=100, unique=True)
     name = fields.CharField(max_length=100)
@@ -13,16 +13,8 @@ class User(Model):
     id_type = fields.CharField(max_length=50, null=True)
     id_number = fields.CharField(max_length=50, null=True)
 
+    class Meta:
+        table = "synergy_credit_app"  # This sets the table name in Postgres
+
     def __str__(self):
         return self.name
-
-
-class Document(Model):
-    id = fields.IntField(pk=True)
-    user = fields.ForeignKeyField("models.User", related_name="documents")
-    filename = fields.CharField(max_length=255)
-    s3_key = fields.CharField(max_length=255)
-    doc_type = fields.CharField(max_length=50)
-
-    def __str__(self):
-        return self.filename
