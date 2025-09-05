@@ -1,5 +1,5 @@
 # ===== build stage =====
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 
 # Copy parent POM and data-service module
@@ -12,7 +12,7 @@ RUN mvn -q -DskipTests -f data-service/pom.xml dependency:go-offline
 RUN mvn -q -DskipTests -f data-service/pom.xml package
 
 # ===== run stage =====
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
 COPY --from=build /build/data-service/target/*.jar /app/app.jar

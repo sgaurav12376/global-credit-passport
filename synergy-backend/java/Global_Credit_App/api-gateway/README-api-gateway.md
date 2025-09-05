@@ -6,7 +6,7 @@ This is the **API Gateway** service for the Global Credit Application project. I
 
 ## 🛠️ Tech Stack
 
-- Java 17  
+- Java 21 
 - Spring Boot  
 - Spring Cloud Gateway  
 - Docker  
@@ -72,7 +72,7 @@ Default port: `8080`
 ## 🐳 Dockerfile
 
 ```Dockerfile
-FROM openjdk:17
+FROM openjdk:21
 COPY target/api-gateway.jar app.jar
 ENTRYPOINT ["java", "-jar", "/app.jar"]
 ```

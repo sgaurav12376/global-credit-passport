@@ -6,7 +6,7 @@ This is the **Register Service** for the Global Credit Application project. It i
 
 ## 🛠️ Tech Stack
 
-- Java 17
+- Java 21
 - Spring Boot (REST API)
 - Spring Data JPA & Hibernate
 - PostgreSQL
@@ -121,7 +121,7 @@ Or define directly in `application.properties`.
 This service can be containerized using:
 
 ```Dockerfile
-FROM openjdk:17
+FROM openjdk:21
 COPY target/register-service.jar app.jar
 ENTRYPOINT ["java", "-jar", "/app.jar"]
 ```

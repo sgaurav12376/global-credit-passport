@@ -27,7 +27,7 @@ JSON already loaded into the eight raw.*_json tables (one row per document)
 Views created (see SQL pack we defined: vw_accounts, vw_revolving_utilization, vw_account_mix, vw_active_accounts)
 
 Build & Run (local)
-# Ensure JDK 17 is used by both Maven and IDE
+# Ensure JDK 21 is used by both Maven and IDE
 java -version
 javac -version
 mvn -v

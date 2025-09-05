@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17
+FROM eclipse-temurin:21
 WORKDIR /app
 COPY register-service.jar app.jar
 EXPOSE 8081

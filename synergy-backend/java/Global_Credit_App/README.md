@@ -19,7 +19,7 @@ global-credit-app/
 
 ## 🛠️ Tech Stack
 
-- Java 17
+- Java 21
 - Spring Boot (Microservices)
 - Spring Cloud Gateway
 - PostgreSQL with Dockerized DB

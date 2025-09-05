@@ -6,7 +6,7 @@ This is the **Country Details Service** in the Global Credit Application project
 
 ## 🛠️ Tech Stack
 
-- Java 17
+- Java 21
 - Spring Boot (REST API)
 - Docker & Docker Compose
 - Spring Cloud Gateway (API Gateway)
@@ -93,7 +93,7 @@ http://localhost:8080/api/countries/India
 ### Dockerfile
 
 ```dockerfile
-FROM openjdk:17
+FROM openjdk:21
 WORKDIR /app
 COPY target/countrydetails-service-1.0.0.jar app.jar
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
