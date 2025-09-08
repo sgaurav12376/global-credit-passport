@@ -1,0 +1,300 @@
+0) Shared helpers (run once)
+-- A tiny helper so every row has a timestamp
+CREATE SCHEMA IF NOT EXISTS raw;
+
+-- If you want deterministic “latest-wins” merges, this helps:
+CREATE OR REPLACE FUNCTION raw.coalesce_new(old anyelement, new anyelement)
+RETURNS anyelement LANGUAGE SQL IMMUTABLE AS $$ SELECT COALESCE(new, old) $$;
+-----------------------------------------------------------------------------------------
+To create Account Routing — tables + ingest procedure
+A) Tables
+-- 1) Full JSON dump
+CREATE TABLE IF NOT EXISTS raw.account_routing_json (
+  id           bigserial PRIMARY KEY,
+  customer_id  uuid,
+  item_id      text,
+  payload      jsonb NOT NULL,
+  received_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- 2) Flattened staging
+CREATE TABLE IF NOT EXISTS raw.account_routing_raw (
+  customer_id       uuid,
+  item_id           text,
+  account_id        text,
+  routing_number    text,
+  wire_routing      text,
+  account_number    text,      -- if present
+  currency          text,
+  received_at       timestamptz NOT NULL DEFAULT now()
+);
+
+-- 3) Clean base (UPSERT target)
+CREATE TABLE IF NOT EXISTS raw.account_routing (
+  customer_id       uuid NOT NULL,
+  item_id           text NOT NULL,
+  account_id        text NOT NULL,
+  routing_number    text,
+  wire_routing      text,
+  account_number    text,
+  currency          text,
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT pk_account_routing PRIMARY KEY (customer_id, item_id, account_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_acc_routing_json_item ON raw.account_routing_json(item_id);
+CREATE INDEX IF NOT EXISTS idx_acc_routing_item      ON raw.account_routing(item_id);
+
+**************************************************************************************************
+
+B) One-call ingest
+CREATE OR REPLACE FUNCTION raw.ingest_account_routing_json(p_customer_id uuid, p_payload jsonb)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_item_id text;
+BEGIN
+  v_item_id := p_payload->>'item_id';
+
+  INSERT INTO raw.account_routing_json (customer_id, item_id, payload)
+  VALUES (p_customer_id, v_item_id, p_payload);
+
+  INSERT INTO raw.account_routing_raw (
+    customer_id, item_id, account_id, routing_number, wire_routing, account_number, currency
+  )
+  SELECT
+    p_customer_id,
+    v_item_id,
+    a->>'account_id',
+    a->>'routing_number',
+    a->>'wire_routing',
+    a->>'account_number',
+    a->>'iso_currency_code'
+  FROM jsonb_array_elements(p_payload->'accounts') a;
+
+  INSERT INTO raw.account_routing AS t (
+    customer_id, item_id, account_id, routing_number, wire_routing, account_number, currency, updated_at
+  )
+  SELECT
+    r.customer_id, r.item_id, r.account_id, r.routing_number, r.wire_routing, r.account_number, r.currency, now()
+  FROM raw.account_routing_raw r
+  WHERE r.customer_id = p_customer_id
+    AND r.item_id     = v_item_id
+  ON CONFLICT (customer_id, item_id, account_id)
+  DO UPDATE SET
+    routing_number = raw.coalesce_new(EXCLUDED.routing_number, raw.account_routing.routing_number),
+    wire_routing   = raw.coalesce_new(EXCLUDED.wire_routing,   raw.account_routing.wire_routing),
+    account_number = raw.coalesce_new(EXCLUDED.account_number, raw.account_routing.account_number),
+    currency       = raw.coalesce_new(EXCLUDED.currency,       raw.account_routing.currency),
+    updated_at     = now();
+END;
+$$;
+
+*********************************************************************************************************
+
+C) How to call it
+SELECT raw.ingest_account_routing_json(
+  '2b1c2e9c-5f2a-4a3a-8c1a-123456789abc',
+  :payload_json   -- full Account & Routing JSON
+);
+
+---------------------------------------------------------------------------------------------------------
+4) Generic template (copy/paste for any new JSON)
+
+ 1) *_json
+CREATE TABLE IF NOT EXISTS raw.<domain>_json (
+  id           bigserial PRIMARY KEY,
+  customer_id  uuid,
+  item_id      text,
+  payload      jsonb NOT NULL,
+  received_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- 2) *_raw
+CREATE TABLE IF NOT EXISTS raw.<domain>_raw (
+  customer_id  uuid,
+  item_id      text,
+  -- flattened columns here ...
+  received_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- 3) base
+CREATE TABLE IF NOT EXISTS raw.<domain> (
+  customer_id  uuid NOT NULL,
+  item_id      text NOT NULL,
+  -- business key columns ...
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT pk_<domain> PRIMARY KEY (customer_id, item_id, <business_key>)
+);
+
+-- INGEST FUNCTION
+CREATE OR REPLACE FUNCTION raw.ingest_<domain>_json(p_customer_id uuid, p_payload jsonb)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE v_item_id text;
+BEGIN
+  v_item_id := p_payload->>'item_id';
+  INSERT INTO raw.<domain>_json (customer_id, item_id, payload)
+  VALUES (p_customer_id, v_item_id, p_payload);
+
+  INSERT INTO raw.<domain>_raw (customer_id, item_id, ...)
+  SELECT p_customer_id, v_item_id, ...
+  FROM <jsonb_array_elements on p_payload>;
+
+  INSERT INTO raw.<domain> AS t (customer_id, item_id, ..., updated_at)
+  SELECT r.customer_id, r.item_id, ..., now()
+  FROM raw.<domain>_raw r
+  WHERE r.customer_id = p_customer_id AND r.item_id = v_item_id
+  ON CONFLICT (customer_id, item_id, <business_key>)
+  DO UPDATE SET
+    -- updatable columns...
+    updated_at = now();
+END;
+$$;
+---------------------------------------------------------------------------------------
++++++++++++++++++++++++++" BELOW QUIRES IS USED TO RETRIVE FROM DB " +++++++++++++++++++++++++
+📦 SQL: create required views
+-- =========
+-- SCHEMA
+-- =========
+CREATE SCHEMA IF NOT EXISTS analytics;
+
+-- ==========================================================================================
+-- 1) ACCOUNTS: parse Plaid Identity JSON into a flat view used by /api/data/accounts
+--    Source: raw.identity_json(payload jsonb)
+-- ==========================================================================================
+DROP VIEW IF EXISTS analytics.vw_accounts;
+CREATE OR REPLACE VIEW analytics.vw_accounts AS
+SELECT
+  a->>'account_id'                         AS account_id,
+  a->>'name'                               AS name,
+  a->>'official_name'                      AS official_name,
+  a->>'type'                               AS account_type,
+  a->>'subtype'                            AS account_subtype,
+  a->>'holder_category'                    AS holder_category,
+  NULLIF(a->'balances'->>'available','')::numeric   AS bal_available,
+  NULLIF(a->'balances'->>'current','')::numeric     AS bal_current,
+  NULLIF(a->'balances'->>'limit','')::numeric       AS credit_limit,
+  a->'balances'->>'iso_currency_code'      AS currency,
+  NULL::text                               AS institution_id,
+  NULL::text                               AS institution_name
+FROM raw.identity_json j
+CROSS JOIN LATERAL jsonb_array_elements(j.payload->'accounts') AS a;
+
+-- ==========================================================================================
+-- 2) UTILIZATION: revolving utilization % across all credit accounts
+--    Endpoint: /api/data/utilization
+-- ==========================================================================================
+DROP VIEW IF EXISTS analytics.vw_revolving_utilization;
+CREATE OR REPLACE VIEW analytics.vw_revolving_utilization AS
+WITH credit AS (
+  SELECT
+    NULLIF(a->'balances'->>'current','')::numeric AS cur,
+    NULLIF(a->'balances'->>'limit','')::numeric   AS lim
+  FROM raw.identity_json j
+  CROSS JOIN LATERAL jsonb_array_elements(j.payload->'accounts') a
+  WHERE a->>'type' = 'credit'
+)
+SELECT CASE
+         WHEN COALESCE(SUM(lim),0) = 0 THEN NULL
+         ELSE ROUND(SUM(cur) / NULLIF(SUM(lim),0) * 100, 2)
+       END AS utilization_percent
+FROM credit
+WHERE cur IS NOT NULL AND lim IS NOT NULL;
+
+-- ==========================================================================================
+-- 3) ACCOUNT MIX: normalized categories + exposure shares + diversity index (HHI)
+--    Endpoint: /api/data/account-mix
+--    Depends on: analytics.vw_accounts
+-- ==========================================================================================
+DROP VIEW IF EXISTS analytics.vw_account_mix;
+CREATE OR REPLACE VIEW analytics.vw_account_mix AS
+WITH base AS (
+  SELECT
+    account_id,
+    LOWER(account_type)    AS t,
+    LOWER(account_subtype) AS st,
+    COALESCE(bal_current, 0)::numeric AS exposure
+  FROM analytics.vw_accounts
+),
+classified AS (
+  SELECT
+    account_id,
+    exposure,
+    CASE
+      WHEN t = 'credit' THEN 'CREDIT'
+      WHEN t = 'loan' AND st IN ('mortgage','home loan') THEN 'LOAN_MORTGAGE'
+      WHEN t = 'loan' AND st IN ('student','education')  THEN 'LOAN_STUDENT'
+      WHEN t = 'loan'                                    THEN 'LOAN_OTHER'
+      WHEN t = 'investment'                              THEN 'INVESTMENT'
+      WHEN t = 'depository' AND st IN ('checking','cash management') THEN 'DEPOSIT_CHECKING'
+      WHEN t = 'depository' AND st IN ('savings','money market','cd','hsa') THEN 'DEPOSIT_SAVINGS'
+      ELSE 'OTHER'
+    END AS category
+  FROM base
+),
+agg AS (
+  SELECT
+    category,
+    COUNT(*)                   AS accounts,
+    SUM(exposure)              AS exposure,
+    SUM(COUNT(*))  OVER ()     AS total_accounts,
+    SUM(SUM(exposure)) OVER () AS total_exposure
+  FROM classified
+  GROUP BY category
+),
+shares AS (
+  SELECT
+    category,
+    accounts,
+    exposure,
+    total_accounts,
+    total_exposure,
+    CASE WHEN total_exposure = 0 THEN 0
+         ELSE exposure / total_exposure END AS exposure_share
+  FROM agg
+)
+SELECT
+  category,
+  accounts,
+  exposure,
+  total_accounts,
+  total_exposure,
+  exposure_share,
+  -- Herfindahl–Hirschman Index (HHI) on exposure shares (0–1, lower = more diverse)
+  SUM(POWER(exposure_share, 2)) OVER () AS hhi
+FROM shares
+ORDER BY exposure DESC NULLS LAST, category;
+
+-- ==========================================================================================
+-- 4) ACTIVE ACCOUNTS: simple summary (count + total exposure)
+--    Endpoint: /api/data/active-accounts
+--    Depends on: analytics.vw_accounts
+-- ==========================================================================================
+DROP VIEW IF EXISTS analytics.vw_active_accounts;
+CREATE OR REPLACE VIEW analytics.vw_active_accounts AS
+SELECT
+  COUNT(*)                              AS active_accounts,
+  SUM(COALESCE(bal_current, 0))::numeric AS total_exposure
+FROM analytics.vw_accounts;
+
+🔎 Quick verification queries
+SELECT * FROM analytics.vw_accounts            LIMIT 5;
+SELECT * FROM analytics.vw_revolving_utilization;
+SELECT * FROM analytics.vw_account_mix;
+SELECT * FROM analytics.vw_active_accounts;
+
+
+If these run, your endpoints should be good:
+
+/api/data/accounts
+
+/api/data/utilization
+
+/api/data/account-mix
+
+/api/data/active-accounts
+
+/api/dashboard-data/overview
