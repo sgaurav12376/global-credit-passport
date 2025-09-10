@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 
+const API_BASE =
+  (typeof window !== "undefined" && window.__API_BASE__) ||
+  (import.meta?.env?.VITE_API_BASE ?? "");
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");      // -> phoneNumber in payload
@@ -20,32 +24,69 @@ export default function Login() {
       setError("Email or phone number is required");
       return;
     }
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+
+    const url = `${API_BASE}/api/login`;
+    const payload = {
+      email: email || undefined,
+      phoneNumber: phone || undefined,
+      password,
+    };
 
     setLoading(true);
     try {
-      const res = await fetch("/api/login", {
+      console.group("LOGIN /api/login");
+      console.log("Request URL:", url);
+      console.log("Payload:", payload);
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email || undefined,
-          phoneNumber: phone || undefined,
-          password,
-        }),
+        // If your API uses cookies/sessions, uncomment:
+        // mode: "cors",
+        // credentials: "include",
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const status = `${res.status} ${res.statusText}`;
+      const raw = await res.text();
+      let data; try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
 
-      // success → mark authed & go to /score
-      if (res.ok && (data?.success === true || data?.message === "Login successful")) {
+      console.log("Status:", status);
+      console.log("Response (raw):", raw);
+      console.log("Response (json):", data);
+      console.groupEnd();
+
+      // Accept ok + common success shapes
+      const success =
+        res.ok &&
+        (data?.success === true ||
+         /success/i.test(String(data?.message || "")) ||
+         data?.token);
+
+      if (success) {
         signin();
         const next = location.state?.from || "/score";
         navigate(next, { replace: true });
         return;
       }
 
-      setError(data?.message || "Login failed");
-    } catch {
-      setError("Error connecting to server");
+      if (res.status === 401) {
+        setError("Invalid email/phone or password");
+        return;
+      }
+
+      setError(
+        data?.message ||
+          (raw || "").trim() ||
+          `Login failed (${res.status})`
+      );
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(navigator.onLine ? "Error connecting to server" : "You appear to be offline");
     } finally {
       setLoading(false);
     }
@@ -100,7 +141,7 @@ export default function Login() {
 
         <div style={styles.footerNote}>
           Don’t have an account?{" "}
-          <Link to="/register" style={styles.link}>Sign Up</Link>
+          <Link to="/signup" style={styles.link}>Sign Up</Link>
         </div>
       </div>
     </div>

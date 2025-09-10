@@ -1,230 +1,186 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// src/synergy_resources/credit_app/pages/dashboard/GlobalScore.jsx
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import CreditGauge from "../../components/CreditGauge";
-import PageHeader from "../../components/PageHeader";
 import ConfettiBurst from "../../components/ConfettiBurst";
-import { toast } from "../../components/Toaster";
 
-/* ------- Config -------- */
-const API_BASE = import.meta?.env?.VITE_API_BASE_URL?.replace(/\/+$/, "") || "";
-const API_SCORES = `${API_BASE}/api/data/scores`; // server can read ?origin=XX&dest=YY
+/* --- helpers --- */
+const API_SCORES = "/api/data/scores"; // backend: { origin, destination }
 
-/* flags + names */
-const flagEmoji = (cc) => {
-  if (!cc || cc.length < 2) return "🌍";
-  const a = cc[0].toUpperCase().charCodeAt(0) - 65 + 0x1f1e6;
-  const b = cc[1].toUpperCase().charCodeAt(0) - 65 + 0x1f1e6;
-  return String.fromCodePoint(a, b);
-};
-const COUNTRY_NAMES = {
-  IN: "India", US: "United States", GB: "United Kingdom", CA: "Canada",
-  AU: "Australia", DE: "Germany", FR: "France", SG: "Singapore",
-};
-const nameOf = (cc) => COUNTRY_NAMES[cc?.toUpperCase()] || (cc || "").toUpperCase();
-
-/* tiny sparkline */
-function Sparkline({ data = [] }) {
-  const w = 64, h = 18, pad = 1;
-  if (!data.length) return null;
-  const min = Math.min(...data), max = Math.max(...data);
-  const span = Math.max(1, max - min);
-  const step = (w - pad * 2) / Math.max(1, data.length - 1);
-  const pts = data.map((v, i) => {
-    const x = pad + i * step;
-    const y = h - pad - ((v - min) / span) * (h - pad * 2);
-    return `${x},${y}`;
-  }).join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="mini-spark" aria-hidden>
-      <polyline fill="none" stroke="currentColor" strokeWidth="1.6" points={pts} />
-    </svg>
-  );
-}
-
-/* bands */
 const BANDS = [
-  { name: "Poor", min: 0 },
-  { name: "Fair", min: 580 },
-  { name: "Good", min: 670 },
+  { name: "Poor",      min:   0 },
+  { name: "Fair",      min: 580 },
+  { name: "Good",      min: 670 },
   { name: "Very Good", min: 740 },
   { name: "Excellent", min: 800 },
 ];
-const bandIndex = (score) => { let i=0; for (let k=0;k<BANDS.length;k++) if (score>=BANDS[k].min) i=k; return i; };
-const bandName  = (score) => BANDS[bandIndex(score)].name;
+const bandName = (v) => {
+  let idx = 0;
+  for (let i = 0; i < BANDS.length; i++) if (v >= BANDS[i].min) idx = i;
+  return BANDS[idx].name;
+};
 
-function playChime() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    [523.25, 659.25, 783.99].forEach((freq, i) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = "sine"; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
-      const t0 = now + i * 0.08;
-      g.gain.setValueAtTime(0, t0);
-      g.gain.linearRampToValueAtTime(0.2, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
-      o.start(t0); o.stop(t0 + 0.4);
-    });
-  } catch {}
+const COUNTRY_NAMES = {
+  IN: "India", US: "United States", GB: "United Kingdom", AE: "United Arab Emirates",
+  AU: "Australia", CA: "Canada", DE: "Germany", FR: "France", SG: "Singapore", JP: "Japan",
+};
+const flagEmoji = (code) => {
+  if (!code || code.length !== 2) return "🧭";
+  const A = 0x1f1e6, a = 65;
+  const c1 = A + (code[0].toUpperCase().charCodeAt(0) - a);
+  const c2 = A + (code[1].toUpperCase().charCodeAt(0) - a);
+  return String.fromCodePoint(c1, c2);
+};
+
+const PAGES = [
+  { to: "/account-mix",          label: "Account Mix",         icon: "🧩", desc: "Composition across credit, loans & deposits" },
+  { to: "/active-accounts",      label: "Active Accounts",     icon: "🏦", desc: "All linked accounts and balances" },
+  { to: "/adverse-records",      label: "Adverse Records",     icon: "⚠️", desc: "Collections, write-offs, bankruptcies" },
+  { to: "/alt-data",             label: "Alt-Data",            icon: "🧪", desc: "Phone, utilities & other alternative data" },
+  { to: "/banking",              label: "Banking",             icon: "🏛️", desc: "Cash flow signals from bank activity" },
+  { to: "/credit-length",        label: "Credit Length",       icon: "⏳", desc: "Average and oldest account age" },
+  { to: "/inquiries",            label: "Inquiries",           icon: "🔎", desc: "Hard pulls in recent months" },
+  { to: "/payment-history",      label: "Payment History",     icon: "💳", desc: "On-time rate & delinquencies" },
+  { to: "/recent-behavior",      label: "Recent Behavior",     icon: "📈", desc: "New accounts, spend spikes, risk" },
+  { to: "/score-scale",          label: "Score Scale",         icon: "📏", desc: "What 0–1000 means by band" },
+  { to: "/utilization",          label: "Utilization",         icon: "📊", desc: "Credit used vs. available limit" },
+  { to: "/country-normalization",label: "Country Normalization", icon: "🌍", desc: "Cross-country score alignment" },
+];
+
+// simple suggestions for the back face
+function reasonsFor(score) {
+  const list = [];
+  if (score < 670) {
+    list.push({ text: "High utilization may be hurting your score", to: "/utilization" });
+    list.push({ text: "Missed / late payments in history", to: "/payment-history" });
+    list.push({ text: "Short credit history (thin file)", to: "/credit-length" });
+    list.push({ text: "Recent hard inquiries or new accounts", to: "/inquiries" });
+  } else if (score < 740) {
+    list.push({ text: "Keep utilization under 30% for a boost", to: "/utilization" });
+    list.push({ text: "Stay on-time; one late hurts a lot", to: "/payment-history" });
+    list.push({ text: "Diversify account mix if needed", to: "/account-mix" });
+  } else {
+    list.push({ text: "Nice! Maintain low utilization", to: "/utilization" });
+    list.push({ text: "Keep perfect payment history", to: "/payment-history" });
+    list.push({ text: "Avoid new hard inquiries", to: "/inquiries" });
+  }
+  return list.slice(0, 4);
 }
 
+/* --- small flip card --- */
+function FlipDial({ title, icon, score }) {
+  const [flipped, setFlipped] = useState(false);
+  const toggle = () => setFlipped(f => !f);
+  const onKey = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+
+  return (
+    <div className="score-tile" style={{ width: 263 }}>
+      <h3 style={{ textAlign: "center", marginTop: 0 }}>{icon} {title}</h3>
+
+      <div
+        className={`flip ${flipped ? "is-flipped" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-pressed={flipped}
+        aria-label={`Toggle details for ${title}`}
+        onClick={toggle}
+        onKeyDown={onKey}
+        /* fixed height so the card doesn't jump when flipping */
+        style={{ height: 230 }}
+      >
+        <div className="flip-inn">
+          {/* FRONT: dial */}
+          <div className="flip-face flip-front">
+            <CreditGauge score={score} width={240} />
+            <div className="score-note" style={{ textAlign: "center" }}>
+              Band: <strong>{bandName(score)}</strong>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 6 }}>
+              Click to see why
+            </div>
+          </div>
+
+          {/* BACK: brief reasons + links */}
+          <div className="flip-face flip-back">
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Why this score</div>
+            <ul style={{ margin: 0, paddingLeft: 16, display: "grid", gap: 4 }}>
+              {reasonsFor(score).map((r, i) => (
+                <li key={i}><Link to={r.to}>{r.text}</Link></li>
+              ))}
+            </ul>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: "auto" }}>
+              Click to go back
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* --- page --- */
 export default function GlobalScore() {
-  /* route (origin/dest) — live from Topbar + persisted */
-  const [route, setRoute] = useState(() => ({
-    origin: (localStorage.getItem("originCountry") || "IN").toUpperCase(),
-    dest:   (localStorage.getItem("destCountry")   || "US").toUpperCase(),
-  }));
+  // countries from Topbar/localStorage
+  const [originCode, setOriginCode] = useState(localStorage.getItem("originCode") || "IN");
+  const [destCode, setDestCode]     = useState(localStorage.getItem("destCode") || "US");
   useEffect(() => {
-    const onRoute = (e) => {
-      const o = e.detail?.origin?.toUpperCase?.() || route.origin;
-      const d = e.detail?.dest?.toUpperCase?.()   || route.dest;
-      setRoute({ origin: o, dest: d });
+    const onRoute = () => {
+      setOriginCode(localStorage.getItem("originCode") || "IN");
+      setDestCode(localStorage.getItem("destCode") || "US");
     };
-    window.addEventListener("country-change", onRoute);
-    return () => window.removeEventListener("country-change", onRoute);
-  }, [route.origin, route.dest]);
+    window.addEventListener("countryRouteChanged", onRoute);
+    return () => window.removeEventListener("countryRouteChanged", onRoute);
+  }, []);
 
-  /* scores */
+  const originName = COUNTRY_NAMES[originCode] || originCode;
+  const destName   = COUNTRY_NAMES[destCode]   || destCode;
+  const oFlag = flagEmoji(originCode);
+  const dFlag = flagEmoji(destCode);
+
+  // scores
   const [origin, setOrigin] = useState(680);
-  const [dest, setDest] = useState(720);
-  const [loading, setLoading] = useState(false);
-
-  // fetch when route changes (with AbortController)
+  const [dest,   setDest]   = useState(720);
   useEffect(() => {
-    const ac = new AbortController();
+    let alive = true;
     (async () => {
       try {
-        setLoading(true);
-        const res = await fetch(`${API_SCORES}?origin=${route.origin}&dest=${route.dest}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (ac.signal.aborted) return;
-        if (typeof json?.origin === "number") setOrigin(json.origin);
-        if (typeof json?.destination === "number") setDest(json.destination);
-      } catch {
-        // silent fallback to demo values
-      } finally {
-        if (!ac.signal.aborted) setLoading(false);
-      }
+        const r = await fetch(API_SCORES);
+        if (!r.ok) throw new Error();
+        const j = await r.json();
+        if (!alive) return;
+        if (typeof j?.origin === "number")      setOrigin(j.origin);
+        if (typeof j?.destination === "number") setDest(j.destination);
+      } catch { /* silent fallback */ }
     })();
-    return () => ac.abort();
-  }, [route.origin, route.dest]);
-
+    return () => { alive = false; };
+  }, []);
   const combined = useMemo(() => Math.round((origin + dest) / 2), [origin, dest]);
 
-  /* hub pages */
-  const PAGES = useMemo(
-    () =>
-      [
-        { to: "/account-mix", label: "Account Mix", desc: "Composition across credit, loans & deposits", icon: () => <span>🧩</span> },
-        { to: "/active-accounts", label: "Active Accounts", desc: "All linked accounts and balances", icon: () => <span>🏦</span> },
-        { to: "/adverse-records", label: "Adverse Records", desc: "Collections, write-offs, bankruptcies", icon: () => <span>⚠️</span> },
-        { to: "/alt-data", label: "Alt-Data", desc: "Phone, utilities & other alternative data", icon: () => <span>🧪</span> },
-        { to: "/banking", label: "Banking", desc: "Cash flow signals from bank activity", icon: () => <span>🏛️</span> },
-        { to: "/credit-length", label: "Credit Length", desc: "Average and oldest account age", icon: () => <span>⏳</span> },
-        { to: "/inquiries", label: "Inquiries", desc: "Hard pulls in recent months", icon: () => <span>🔎</span> },
-        { to: "/payment-history", label: "Payment History", desc: "On-time rate & delinquencies", icon: () => <span>💳</span> },
-        { to: "/recent-behavior", label: "Recent Behavior", desc: "New accounts, spend spikes, risk", icon: () => <span>📈</span> },
-        { to: "/score-scale", label: "Score Scale", desc: "What 0–1000 means by band", icon: () => <span>📏</span> },
-        { to: "/utilization", label: "Utilization", desc: "Credit used vs. available limit", icon: () => <span>📊</span> },
-        { to: "/country-normalization", label: "Country Normalization", desc: "Cross-country score alignment", icon: () => <span>🌍</span> },
-      ].sort((a, b) => a.label.localeCompare(b.label)),
+  const sortedPages = useMemo(
+    () => [...PAGES].sort((a, b) => a.label.localeCompare(b.label)),
     []
   );
 
-  /* celebrate & history */
-  const [celebrate, setCelebrate] = useState(false);
-  useEffect(() => {
-    const prev = Number(localStorage.getItem("lastGlobalScore"));
-    const prevIdx = Number.isFinite(prev) ? bandIndex(prev) : null;
-    const nowIdx  = bandIndex(combined);
-    if (prevIdx == null ? nowIdx >= bandIndex(670) : nowIdx > prevIdx) {
-      setCelebrate(true);
-      toast(`🎉 Congrats! Your band improved to ${bandName(combined)}.`, { variant: "success", ttl: 4200 });
-      playChime();
-      setTimeout(() => setCelebrate(false), 3600);
-    }
-    localStorage.setItem("lastGlobalScore", String(combined));
-    const hist = JSON.parse(localStorage.getItem("scoreHistory") || "[]");
-    hist.push(combined);
-    localStorage.setItem("scoreHistory", JSON.stringify(hist.slice(-40)));
-    localStorage.setItem("lastOriginScore", String(origin));
-    localStorage.setItem("lastDestScore",   String(dest));
-  }, [combined, origin, dest]);
-
-  // deltas for KPI pills
-  const originDelta = origin - Number(localStorage.getItem("lastOriginScore") || origin);
-  const destDelta   = dest   - Number(localStorage.getItem("lastDestScore")   || dest);
-
-  // global sparkline (only when useful)
-  const scoreHistory = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem("scoreHistory") || "[]"); }
-    catch { return []; }
-  }, []);
-  const showSpark = useMemo(() => {
-    if (scoreHistory.length < 3) return false;
-    const min = Math.min(...scoreHistory), max = Math.max(...scoreHistory);
-    return max - min > 2; // render only if variation > 2 pts
-  }, [scoreHistory]);
-
   return (
     <section className="page">
-      <ConfettiBurst fire={celebrate || combined >= 670} />
+      <ConfettiBurst fire={combined >= 670} />
 
-      <PageHeader
-        title="Global Score"
-        subtitle={
-          <>
-            Cross-country normalized credit summary.
-            {loading && <span style={{ marginLeft: 8, color: "#6b7280" }}>Loading…</span>}
-          </>
-        }
-        context={{ origin: nameOf(route.origin), dest: nameOf(route.dest), range: "Last 30 days" }}
-      />
-
-      {/* KPI pills */}
-      <div className="hub-grid compact" role="list" style={{ marginTop: 8 }}>
-        <Link to="/active-accounts?side=origin" className="hub-card slim" role="listitem" title="See accounts in origin country">
-          <div className="hub-icon small">{flagEmoji(route.origin)}</div>
-          <div className="hub-main">
-            <div className="hub-title">Origin</div>
-            <div className="hub-desc">
-              <strong>{origin}</strong>{" "}
-              {originDelta === 0 ? "· 0" : originDelta > 0 ? `· ▲${originDelta}` : `· ▼${Math.abs(originDelta)}`}
-            </div>
-          </div>
-          <div className="hub-arrow" aria-hidden>→</div>
-        </Link>
-
-        <Link to="/active-accounts?side=dest" className="hub-card slim" role="listitem" title="See accounts in destination country">
-          <div className="hub-icon small">{flagEmoji(route.dest)}</div>
-          <div className="hub-main">
-            <div className="hub-title">Destination</div>
-            <div className="hub-desc">
-              <strong>{dest}</strong>{" "}
-              {destDelta === 0 ? "· 0" : destDelta > 0 ? `· ▲${destDelta}` : `· ▼${Math.abs(destDelta)}`}
-            </div>
-          </div>
-          <div className="hub-arrow" aria-hidden>→</div>
-        </Link>
-
-        <Link to="/score-scale" className="hub-card slim" role="listitem" title="See band scale">
-          <div className="hub-icon small">🌍</div>
-          <div className="hub-main">
-            <div className="hub-title">Global</div>
-            <div className="hub-desc">
-              <strong>{combined}</strong> ({bandName(combined)})
-            </div>
-          </div>
-          {showSpark ? <Sparkline data={scoreHistory.slice(-20)} /> : <div className="hub-arrow" aria-hidden>→</div>}
-        </Link>
+      {/* Title + description */}
+      <div className="page-header" style={{ marginBottom: 8 }}>
+        <h1 style={{ margin: 0 }}>Global Score</h1>
+        <p className="page-sub" style={{ margin: "4px 0 0" }}>
+          Cross-country normalized credit summary.
+        </p>
+        <p className="page-sub" style={{ margin: "2px 0 0", color: "#374151" }}>
+          Normalized from <strong>{originName}</strong> → <strong>{destName}</strong> • Last 30 days
+        </p>
       </div>
 
-      {/* Hub menu */}
-      <div className="hub-grid compact" role="list" style={{ marginTop: 8 }}>
-        {PAGES.map(({ to, label, icon: Icon, desc }) => (
+      {/* Hub tiles */}
+      <div className="hub-grid compact" role="list" style={{ marginTop: 10 }}>
+        {sortedPages.map(({ to, label, desc, icon }) => (
           <Link key={to} to={to} className="hub-card slim" role="listitem" title={desc}>
-            <div className="hub-icon small"><Icon /></div>
+            <div className="hub-icon small" aria-hidden>{icon}</div>
             <div className="hub-main">
               <div className="hub-title">{label}</div>
               <div className="hub-desc">{desc}</div>
@@ -234,20 +190,33 @@ export default function GlobalScore() {
         ))}
       </div>
 
-      {/* Dials (hide band text for global) */}
-      <div className="score-grid compact small">
+      {/* KPI row (mini boxes) */}
+      <div className="score-grid compact small" style={{ marginTop: 8 }}>
         <div className="score-tile sm">
-          <h3>Origin Score</h3>
-          <CreditGauge score={origin} width={220} size="sm" />
+          <h3 style={{ textAlign: "center", marginTop: 0 }}>{oFlag} Origin</h3>
+          <div className="score-note" style={{ textAlign: "center" }}>
+            <strong>{origin}</strong> ({bandName(origin)})
+          </div>
         </div>
         <div className="score-tile sm">
-          <h3>Destination Score</h3>
-          <CreditGauge score={dest} width={220} size="sm" />
+          <h3 style={{ textAlign: "center", marginTop: 0 }}>{dFlag} Destination</h3>
+          <div className="score-note" style={{ textAlign: "center" }}>
+            <strong>{dest}</strong> ({bandName(dest)})
+          </div>
         </div>
-        <div className="score-tile sm hide-band">
-          <h3>Global Score</h3>
-          <CreditGauge score={combined} width={220} size="sm" />
+        <div className="score-tile sm">
+          <h3 style={{ textAlign: "center", marginTop: 0 }}>🌐 Global</h3>
+          <div className="score-note" style={{ textAlign: "center" }}>
+            <strong>{combined}</strong> ({bandName(combined)})
+          </div>
         </div>
+      </div>
+
+      {/* Dials with flip-on-click */}
+      <div className="score-grid compact" style={{ marginTop: 10 }}>
+        <FlipDial title="Origin Score"      icon={oFlag} score={origin} />
+        <FlipDial title="Destination Score" icon={dFlag} score={dest} />
+        <FlipDial title="Global Score"      icon="🌐"   score={combined} />
       </div>
     </section>
   );
