@@ -5,7 +5,6 @@ import jakarta.validation.ConstraintValidatorContext;
 import org.apache.commons.beanutils.BeanUtils;
 
 public class FieldMatchValidator implements ConstraintValidator<FieldMatch, Object> {
-
     private String firstField;
     private String secondField;
 
@@ -18,8 +17,8 @@ public class FieldMatchValidator implements ConstraintValidator<FieldMatch, Obje
     @Override
     public boolean isValid(Object value, ConstraintValidatorContext context) {
         try {
-            final String first = BeanUtils.getProperty(value, firstField);
-            final String second = BeanUtils.getProperty(value, secondField);
+            String first = BeanUtils.getProperty(value, firstField);
+            String second = BeanUtils.getProperty(value, secondField);
             return first != null && first.equals(second);
         } catch (Exception e) {
             return false;

@@ -17,4 +17,9 @@ public class LoginController {
     public ResponseEntity<ApiResponse<LoginResponseDTO>> login(@RequestBody LoginRequestDTO loginRequest) {
         return loginService.login(loginRequest);
     }
+
+    @PostMapping(value = "/signup", produces = "application/json")
+    public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(@RequestBody SignupRequestDTO signupRequest) {
+        return loginService.signup(signupRequest);
+    }
 }

@@ -62,13 +62,13 @@ Frontend runs separately using:
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 
 ### 4. Access the app
 
 - **API Gateway:** [http://localhost:8080](http://localhost:8080)
-- **Frontend (React):** [http://localhost:3000](http://localhost:3000)
+- **Frontend (React):** [http://localhost:5173](http://localhost:3000)
 
 ---
 
