@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 
+const API_BASE =
+  (typeof window !== "undefined" && window.__API_BASE__) ||
+  (import.meta?.env?.VITE_API_BASE ?? ""); // e.g. "https://api.example.com"
+
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState(""); // -> phoneNumber in payload
@@ -19,30 +23,62 @@ export default function Signup() {
       setError("Please enter email or phone number");
       return;
     }
+    if (!password) {
+      setError("Please enter a password");
+      return;
+    }
+
+    const url = `${API_BASE}/api/register`;
+    const payload = {
+      email: email || undefined,
+      phoneNumber: phone || undefined,
+      password,
+    };
 
     setLoading(true);
     try {
-      const res = await fetch("/api/register", {
+      console.group("SIGNUP /api/register");
+      console.log("Request URL:", url);
+      console.log("Payload:", payload);
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email || undefined,
-          phoneNumber: phone || undefined,
-          password,
-        }),
+        // If your API uses cookies/sessions, uncomment the next 2 lines:
+        // mode: "cors",
+        // credentials: "include",
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const status = `${res.status} ${res.statusText}`;
+      const raw = await res.text(); // read as text first to log exact server output
+      let data;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
 
-      if (res.ok && data?.success !== false) {
+      console.log("Status:", status);
+      console.log("Response (raw):", raw);
+      console.log("Response (json):", data);
+      console.groupEnd();
+
+      // Accept 200/201/204 by default (and also allow data.success === true)
+      if (res.ok && (data?.success !== false)) {
+        // mark signed in and go to score
         signin();
         navigate("/score", { replace: true });
         return;
       }
 
-      setError(data?.message || "Signup failed");
-    } catch {
-      setError("Error connecting to server");
+      // Not OK – surface the best message
+      setError(
+        data?.message ||
+          (raw || "").trim() ||
+          `Signup failed (${res.status})`
+      );
+    } catch (err) {
+      console.error("Signup error:", err);
+      setError(
+        navigator.onLine ? "Error connecting to server" : "You appear to be offline"
+      );
     } finally {
       setLoading(false);
     }
@@ -138,12 +174,11 @@ const styles = {
     marginBottom: 28,
   },
   formGroup: { marginBottom: 18 },
-
   input: {
     width: "100%",
     padding: "13px 16px",
     backgroundColor: "#eaf2ff",
-    border: "1px solid #cfe0ff", // ← fixed
+    border: "1px solid #cfe0ff",
     borderRadius: 8,
     fontSize: 15,
     outline: "none",
