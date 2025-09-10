@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  python-api:
+    build: ./python
+    container_name: python-api
+    ports:
+      - "8000:8000"
+
+  java-api:
+    build: ./java
+    container_name: java-api
+    ports:
+      - "8080:8080"
