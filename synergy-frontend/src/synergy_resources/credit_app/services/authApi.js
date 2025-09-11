@@ -1,25 +1,41 @@
-async function safeJson(res) { try { return await res.json(); } catch { return {}; } }
-async function safeText(res) { try { return await res.text(); } catch { return ""; } }
+// src/synergy_resources/credit_app/services/authApi.js
+const API_BASE =
+  (typeof window !== "undefined" && window.__API_BASE__) ||
+  (import.meta?.env?.VITE_API_BASE ?? ""); // "" → uses your Vite proxy
 
-/** Matches colleague: POST /login { username, password } where username = email OR phone */
-export async function loginRequest({ email, phone, password }) {
-  const username = email || phone;
-  const res = await fetch("/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  if (!res.ok) throw new Error((await safeText(res)) || "Login failed");
-  return safeJson(res); // may be {} if backend returns no body
+const url = (p) => `${API_BASE}${p}`;
+
+async function parse(res) {
+  const raw = await res.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch {}
+  return { ok: res.ok, status: res.status, data, raw };
 }
 
-/** Signup to DB; adjust fields if your backend expects more */
-export async function signupRequest({ email, phone, password }) {
-  const res = await fetch("/register", {
+export async function login({ email, phoneNumber, password }) {
+  const { ok, data, raw, status } = await fetch(url("/api/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, phone, password }),
-  });
-  if (!res.ok) throw new Error((await safeText(res)) || "Signup failed");
-  return safeJson(res);
+    // credentials: "include", // uncomment if your API uses cookies
+    body: JSON.stringify({ email, phoneNumber, password }),
+  }).then(parse);
+
+  if (!ok) {
+    throw Object.assign(new Error(data?.message || raw || "Login failed"), { status, data });
+  }
+  return data ?? {};
+}
+
+export async function signup({ email, phoneNumber, password }) {
+  const { ok, data, raw, status } = await fetch(url("/api/register"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // credentials: "include",
+    body: JSON.stringify({ email, phoneNumber, password }),
+  }).then(parse);
+
+  if (!ok) {
+    throw Object.assign(new Error(data?.message || raw || "Signup failed"), { status, data });
+  }
+  return data ?? {};
 }

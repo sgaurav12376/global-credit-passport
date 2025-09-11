@@ -1,84 +1,57 @@
-import React, { useState } from "react";
+// src/synergy_resources/credit_app/pages/Auth/signup/Signup.jsx
+import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
+import { signup as signupApi } from "../../../services/authApi.js";
 
-const API_BASE =
-  (typeof window !== "undefined" && window.__API_BASE__) ||
-  (import.meta?.env?.VITE_API_BASE ?? ""); // e.g. "https://api.example.com"
+const isEmail = (v) => !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const isPhone = (v) => !!v && /^[0-9+()\-\s]{8,}$/.test(v.trim());
 
 export default function Signup() {
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // -> phoneNumber in payload
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const { signin } = useAuth();
   const navigate = useNavigate();
+
+  const valid = useMemo(() => {
+    const mailOK = email && isEmail(email);
+    const phoneOK = phone && isPhone(phone);
+    return !!password && (mailOK || phoneOK);
+  }, [email, phone, password]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (!email && !phone) {
-      setError("Please enter email or phone number");
+    if (!valid) {
+      if (!password) return setError("Please enter a password");
+      if (!email && !phone) return setError("Please enter email or phone");
+      if (email && !isEmail(email)) return setError("Enter a valid email address");
+      if (phone && !isPhone(phone)) return setError("Enter a valid phone number");
       return;
     }
-    if (!password) {
-      setError("Please enter a password");
-      return;
-    }
-
-    const url = `${API_BASE}/api/register`;
-    const payload = {
-      email: email || undefined,
-      phoneNumber: phone || undefined,
-      password,
-    };
 
     setLoading(true);
     try {
-      console.group("SIGNUP /api/register");
-      console.log("Request URL:", url);
-      console.log("Payload:", payload);
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // If your API uses cookies/sessions, uncomment the next 2 lines:
-        // mode: "cors",
-        // credentials: "include",
-        body: JSON.stringify(payload),
+      const data = await signupApi({
+        email: email || undefined,
+        phoneNumber: phone || undefined,
+        password,
       });
 
-      const status = `${res.status} ${res.statusText}`;
-      const raw = await res.text(); // read as text first to log exact server output
-      let data;
-      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
-
-      console.log("Status:", status);
-      console.log("Response (raw):", raw);
-      console.log("Response (json):", data);
-      console.groupEnd();
-
-      // Accept 200/201/204 by default (and also allow data.success === true)
-      if (res.ok && (data?.success !== false)) {
-        // mark signed in and go to score
-        signin();
-        navigate("/score", { replace: true });
+      if (data?.success === false) {
+        setError(data?.message || "Signup failed");
         return;
       }
 
-      // Not OK – surface the best message
-      setError(
-        data?.message ||
-          (raw || "").trim() ||
-          `Signup failed (${res.status})`
-      );
+      signin();
+      navigate("/score", { replace: true });
     } catch (err) {
-      console.error("Signup error:", err);
-      setError(
-        navigator.onLine ? "Error connecting to server" : "You appear to be offline"
-      );
+      setError(err?.message || "Error connecting to server");
     } finally {
       setLoading(false);
     }
@@ -90,7 +63,7 @@ export default function Signup() {
         <h2 style={styles.heading}>Create your account</h2>
         <p style={styles.subtext}>Sign up to get started</p>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div style={styles.formGroup}>
             <input
               type="email"
@@ -98,6 +71,7 @@ export default function Signup() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={styles.input}
+              autoComplete="email"
             />
           </div>
 
@@ -110,6 +84,7 @@ export default function Signup() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               style={styles.input}
+              autoComplete="tel"
             />
           </div>
 
@@ -121,10 +96,11 @@ export default function Signup() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={styles.input}
+              autoComplete="new-password"
             />
           </div>
 
-          <button type="submit" style={styles.primaryBtn} disabled={loading}>
+          <button type="submit" style={styles.primaryBtn} disabled={loading || !valid}>
             {loading ? "Signing up..." : "Sign Up"}
           </button>
 
@@ -133,9 +109,7 @@ export default function Signup() {
 
         <div style={styles.footerNote}>
           Already have an account?{" "}
-          <Link to="/login" style={styles.link}>
-            Sign in
-          </Link>
+          <Link to="/login" style={styles.link}>Sign in</Link>
         </div>
       </div>
     </div>
@@ -160,19 +134,8 @@ const styles = {
     maxWidth: 520,
     width: "100%",
   },
-  heading: {
-    textAlign: "center",
-    color: "#2c3e50",
-    fontSize: 28,
-    fontWeight: 700,
-    marginBottom: 8,
-  },
-  subtext: {
-    textAlign: "center",
-    fontSize: 14,
-    color: "#6c7a89",
-    marginBottom: 28,
-  },
+  heading: { textAlign: "center", color: "#2c3e50", fontSize: 28, fontWeight: 700, marginBottom: 8 },
+  subtext: { textAlign: "center", fontSize: 14, color: "#6c7a89", marginBottom: 28 },
   formGroup: { marginBottom: 18 },
   input: {
     width: "100%",
@@ -183,12 +146,7 @@ const styles = {
     fontSize: 15,
     outline: "none",
   },
-  orSeparator: {
-    textAlign: "center",
-    fontSize: 13,
-    color: "#999",
-    margin: "14px 0",
-  },
+  orSeparator: { textAlign: "center", fontSize: 13, color: "#999", margin: "14px 0" },
   primaryBtn: {
     width: "100%",
     padding: "12px",
@@ -201,17 +159,7 @@ const styles = {
     cursor: "pointer",
     marginTop: 2,
   },
-  error: {
-    textAlign: "center",
-    fontWeight: "bold",
-    marginTop: 14,
-    color: "#e74c3c",
-  },
-  footerNote: {
-    textAlign: "center",
-    fontSize: 13,
-    color: "#888",
-    marginTop: 18,
-  },
+  error: { textAlign: "center", fontWeight: "bold", marginTop: 14, color: "#e74c3c" },
+  footerNote: { textAlign: "center", fontSize: 13, color: "#888", marginTop: 18 },
   link: { color: "#3498db", textDecoration: "none" },
 };
