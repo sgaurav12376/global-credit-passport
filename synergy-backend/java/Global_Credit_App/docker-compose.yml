@@ -1,84 +1,61 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: synergydb
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./import:/import:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d synergydb"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks: [global-credit-network]
-
   login-service:
-    build: ./login-service
-    ports:
-      - "8082:8082"
-    depends_on:
-      - postgres
+    image: login-service:latest
+    ports: ["8082:8082"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/synergydb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://sachu01.c6reawuqi249.us-east-1.rds.amazonaws.com:5432/sachu
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: admin
-    networks: [global-credit-network]
+      SPRING_DATASOURCE_PASSWORD: sachu123
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_COGNITO_USERPOOL_ID: us-east-1_mPnp7FUWD
+      AWS_COGNITO_APP_CLIENT_ID: 4p8dsmf03m5hvpf1ta36q468ab
+    restart: unless-stopped
 
   register-service:
-    build: ./register-service
+    image: register-service:latest
+    container_name: register-service
     ports:
       - "8081:8081"
-    depends_on:
-      - postgres
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/synergydb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://sachu01.c6reawuqi249.us-east-1.rds.amazonaws.com:5432/sachu
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: admin
-    networks: [global-credit-network]
+      SPRING_DATASOURCE_PASSWORD: sachu123
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_COGNITO_USERPOOL_ID: us-east-1_mPnp7FUWD
+      AWS_COGNITO_APP_CLIENT_ID: 4p8dsmf03m5hvpf1ta36q468ab
+    restart: unless-stopped
+
 
   countrydetails-service:
     build: ./countrydetails-service
-    ports:
-      - "8083:8083"
-    networks: [global-credit-network]
+    ports: ["8083:8083"]
 
   data-service:
-    # IMPORTANT: build from repo root so Maven sees the parent POM
     build:
       context: .
       dockerfile: data-service/Dockerfile
     environment:
-      - DB_URL=jdbc:postgresql://postgres:5432/synergydb
-      - DB_USER=postgres
-      - DB_PASS=admin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "8085:8085"
-    networks: [global-credit-network]
+      DB_URL: jdbc:postgresql://sachu01.c6reawuqi249.us-east-1.rds.amazonaws.com:5432/sachu
+      DB_USER: postgres
+      DB_PASS: sachu123
+    ports: ["8085:8085"]
 
   api-gateway:
     build: ./api-gateway
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     depends_on:
       - login-service
       - register-service
       - countrydetails-service
       - data-service
-    networks: [global-credit-network]
-
-volumes:
-  postgres_data:
 
 networks:
-  global-credit-network:
+  default:
+    name: global-credit-network
     driver: bridge
