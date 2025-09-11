@@ -1,40 +1,48 @@
 // services/authApi.js
 const API_BASE =
   (typeof window !== "undefined" && window.__API_BASE__) ||
-  (import.meta?.env?.VITE_API_BASE ?? ""); // e.g. http://localhost:8080
+  (import.meta?.env?.VITE_API_BASE ?? "");
 
 const url = (p) => `${API_BASE}${p}`;
 
 async function parse(res) {
   const raw = await res.text();
   let data = null;
-  try { data = raw ? JSON.parse(raw) : null; } catch {}
-  return { ok: res.ok, status: res.status, data, raw };
+
+  // If the server sent HTML (common when hitting Amplify instead of API),
+  // treat this as "backend not reachable / wrong URL".
+  const looksLikeHTML = raw && /^\s*<!doctype html/i.test(raw);
+
+  try {
+    data = looksLikeHTML ? null : (raw ? JSON.parse(raw) : null);
+  } catch {
+    // ignore JSON parse error; will be handled below
+  }
+
+  return { ok: res.ok, status: res.status, data, raw, looksLikeHTML };
 }
 
-// ✅ Backend login expects ONLY: { email, password }
 export async function login({ email, password }) {
-  const { ok, data, raw, status } = await fetch(url("/api/login"), {
+  const { ok, data, raw, status, looksLikeHTML } = await fetch(url("/api/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   }).then(parse);
 
+  if (looksLikeHTML) {
+    throw Object.assign(new Error("Backend not reachable. Check VITE_API_BASE or server."), { status });
+  }
   if (!ok) {
     throw Object.assign(new Error(data?.message || raw || "Login failed"), { status, data });
   }
   return data ?? {};
 }
 
-// ✅ Backend register expects:
-// { firstName, lastName, email, passportNumber, phoneNumber, password, confirmPassword }
-export async function signup(payload) {
-  const {
-    firstName, lastName, email, passportNumber,
-    phoneNumber, password, confirmPassword
-  } = payload;
-
-  const { ok, data, raw, status } = await fetch(url("/api/register"), {
+export async function signup({
+  firstName, lastName, email, passportNumber,
+  phoneNumber, password, confirmPassword
+}) {
+  const { ok, data, raw, status, looksLikeHTML } = await fetch(url("/api/register"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -43,6 +51,9 @@ export async function signup(payload) {
     }),
   }).then(parse);
 
+  if (looksLikeHTML) {
+    throw Object.assign(new Error("Backend not reachable. Check VITE_API_BASE or server."), { status });
+  }
   if (!ok) {
     throw Object.assign(new Error(data?.message || raw || "Signup failed"), { status, data });
   }
