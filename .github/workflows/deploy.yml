@@ -23,6 +23,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+       - name: Zip project
+         run: zip -r app.zip synergy-backend appspec.yml
+
       - name: Upload to S3
         run: aws s3 cp app.zip s3://credit-app-backend-auto/app.zip
 
