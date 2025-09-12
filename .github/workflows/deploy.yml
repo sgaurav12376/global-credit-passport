@@ -10,12 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repo
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Archive application
-        run: zip -r app.zip . 
+      # 2️⃣ Make deploy.sh executable
+      - name: Make deploy.sh executable
+        run: chmod +x synergy-backend/scripts/deploy.sh
 
+      # 3️⃣ Archive backend only
+      - name: Archive backend
+        run: zip -r app.zip synergy-backend/
+
+      # 4️⃣ Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -23,9 +30,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      # 5️⃣ Upload zip to S3
       - name: Upload to S3
         run: aws s3 cp app.zip s3://credit-app-backend-auto/app.zip
 
+      # 6️⃣ Deploy with CodeDeploy
       - name: Deploy with CodeDeploy
         run: |
           aws deploy create-deployment \
