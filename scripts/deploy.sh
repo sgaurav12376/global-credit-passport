@@ -3,8 +3,8 @@ set -ex
 
 echo ">>> Deployment started..."
 
-# Go to the deployed backend directory
-cd /home/ubuntu/app
+# Go to deployed backend directory
+cd /home/ubuntu/app/synergy-backend
 
 # Stop old containers (ignore errors if none are running)
 echo ">>> Stopping old containers..."
