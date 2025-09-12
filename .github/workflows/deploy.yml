@@ -16,6 +16,7 @@ jobs:
       # Create deployment bundle (backend + scripts + docker-compose + appspec.yml)
       - name: Zip project
         run: |
+          chmod +x scripts/*.sh
           zip -r app.zip synergy-backend scripts appspec.yml docker-compose.yml
 
       - name: Configure AWS credentials
