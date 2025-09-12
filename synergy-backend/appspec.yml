@@ -2,7 +2,7 @@ version: 0.0
 os: linux
 
 files:
-  - source: synergy-backend
+  - source: .
     destination: /home/ubuntu/app
 
 hooks:
