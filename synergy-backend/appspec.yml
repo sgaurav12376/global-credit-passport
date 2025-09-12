@@ -6,7 +6,7 @@ files:
     destination: /home/ubuntu/app
 
 hooks:
-  BeforeInstall:
+  AfterInstall:
     - location: scripts/deploy.sh
       timeout: 600
       runas: ubuntu
