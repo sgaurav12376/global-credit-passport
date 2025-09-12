@@ -3,13 +3,15 @@ set -ex
 
 echo ">>> Deployment started..."
 
-APP_DIR="/home/ubuntu/app"
-cd $APP_DIR
+# Go to the deployed backend directory
+cd /home/ubuntu/app
 
+# Stop old containers (ignore errors if none are running)
 echo ">>> Stopping old containers..."
-docker compose down || true   # use 'docker-compose' if your system doesn't support 'docker compose'
+sudo docker-compose down || true
 
+# Build and start new containers
 echo ">>> Building and starting new containers..."
-docker compose up -d --build
+sudo docker-compose up -d --build
 
 echo ">>> Deployment complete!"
