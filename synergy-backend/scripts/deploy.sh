@@ -1,16 +1,17 @@
 #!/bin/bash
-set -e
+set -ex
 
 echo ">>> Deployment started..."
 
-cd /home/ubuntu/app/backend
+# Go to the deployed backend directory
+cd /home/ubuntu/app/synergy-backend
 
-# Stop old containers (if any)
+# Stop old containers (ignore errors if none are running)
 echo ">>> Stopping old containers..."
-docker-compose down || true
+sudo docker-compose down || true
 
 # Build and start new containers
 echo ">>> Building and starting new containers..."
-docker-compose up -d --build
+sudo docker-compose up -d --build
 
 echo ">>> Deployment complete!"
