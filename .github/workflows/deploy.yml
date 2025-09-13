@@ -32,6 +32,6 @@ jobs:
       - name: Deploy with CodeDeploy
         run: |
           aws deploy create-deployment \
-            --application-name credit_app_backend \
-            --deployment-group-name credit_app_backend_DG \
+            --application-name Credit-App-Backend \
+            --deployment-group-name Credit-App-Backend-DG \
             --s3-location bucket=credit-app-backend-auto,key=app.zip,bundleType=zip
