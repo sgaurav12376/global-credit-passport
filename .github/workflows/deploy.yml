@@ -17,7 +17,7 @@ jobs:
       - name: Zip project
         run: |
           chmod +x scripts/*.sh
-          zip -r app.zip synergy-backend scripts appspec.yml docker-compose.yml
+          zip -r app.zip scripts appspec.yml docker-compose.yml synergy-backend -x "synergy-backend/python/*"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
