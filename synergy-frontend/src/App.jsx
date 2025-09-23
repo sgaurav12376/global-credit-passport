@@ -27,9 +27,6 @@ import AltData from "./synergy_resources/credit_app/pages/dashboard/AltData";
 import Banking from "./synergy_resources/credit_app/pages/dashboard/Banking";
 import CountryNormalization from "./synergy_resources/credit_app/pages/dashboard/CountryNormalization";
 
-// // testing
-// import DevBypass from "./synergy_resources/credit_app/components/DevBypass";
-// // testing
 
 function DashboardLayout() {
   return (
@@ -57,11 +54,6 @@ export default function App() {
           
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} /> 
-         
-          {/* testing */}
-          {/* <Route path="/login" element={<DevBypass><Login /></DevBypass>} />
-          <Route path="/signup" element={<DevBypass><Signup /></DevBypass>} /> */}
-          {/* testing */}
 
           {/* Protected shell */}
           <Route element={<ProtectedRoute />}>

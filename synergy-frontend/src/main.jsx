@@ -1,3 +1,6 @@
+// BYPASS
+// sessionStorage.setItem("gc_authed", "1");
+//BYPASS
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";

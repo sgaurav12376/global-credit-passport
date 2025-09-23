@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import CreditGauge from "../../components/CreditGauge";
-import ConfettiBurst from "../../components/ConfettiBurst";
 
 /* --- helpers --- */
 const API_SCORES = "/api/data/scores"; // backend: { origin, destination }
@@ -47,7 +46,7 @@ const PAGES = [
   { to: "/country-normalization",label: "Country Normalization", icon: "🌍", desc: "Cross-country score alignment" },
 ];
 
-// simple suggestions for the back face
+// reasons for flip back
 function reasonsFor(score) {
   const list = [];
   if (score < 670) {
@@ -67,10 +66,25 @@ function reasonsFor(score) {
   return list.slice(0, 4);
 }
 
+/* --- tiny color system for KPI tone --- */
+function toneFor(score) {
+  if (score >= 800) {
+    return { color: "#059669", bg: "#ecfdf5", border: "#a7f3d0", shadow: "rgba(16,185,129,.18)" }; // emerald
+  }
+  if (score >= 670) {
+    return { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", shadow: "rgba(34,197,94,.16)" }; // green
+  }
+  if (score >= 580) {
+    return { color: "#d97706", bg: "#fffbeb", border: "#fde68a", shadow: "rgba(245,158,11,.16)" }; // amber
+  }
+  return { color: "#dc2626", bg: "#fef2f2", border: "#fecaca", shadow: "rgba(239,68,68,.16)" }; // red
+}
+const pct = (score) => Math.max(0, Math.min(100, Math.round((Number(score) || 0) / 10)));
+
 /* --- small flip card --- */
 function FlipDial({ title, icon, score }) {
   const [flipped, setFlipped] = useState(false);
-  const toggle = () => setFlipped(f => !f);
+  const toggle = () => setFlipped((f) => !f);
   const onKey = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
 
   return (
@@ -85,7 +99,6 @@ function FlipDial({ title, icon, score }) {
         aria-label={`Toggle details for ${title}`}
         onClick={toggle}
         onKeyDown={onKey}
-        /* fixed height so the card doesn't jump when flipping */
         style={{ height: 230 }}
       >
         <div className="flip-inn">
@@ -154,69 +167,147 @@ export default function GlobalScore() {
     })();
     return () => { alive = false; };
   }, []);
+
   const combined = useMemo(() => Math.round((origin + dest) / 2), [origin, dest]);
+
+  // persist for Topbar pill + sparkline
+  useEffect(() => {
+    if (!Number.isFinite(combined)) return;
+    localStorage.setItem("lastGlobalScore", String(combined));
+    let hist = [];
+    try { hist = JSON.parse(localStorage.getItem("scoreHistory") || "[]"); } catch {}
+    if (!hist.length || hist[hist.length - 1] !== combined) {
+      const next = [...hist, combined].slice(-50);
+      localStorage.setItem("scoreHistory", JSON.stringify(next));
+    }
+  }, [combined]);
 
   const sortedPages = useMemo(
     () => [...PAGES].sort((a, b) => a.label.localeCompare(b.label)),
     []
   );
 
+  // tones
+  const tO = toneFor(origin);
+  const tD = toneFor(dest);
+  const tG = toneFor(combined);
+
   return (
     <section className="page">
-      <ConfettiBurst fire={combined >= 670} />
+      <div className="container">
+        {/* small style block JUST for the Overview row */}
+        <style>{`
+          .kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;
+               box-shadow:0 4px 10px rgba(0,0,0,.06);display:grid;gap:8px}
+          .kpi-top{display:flex;align-items:center;justify-content:space-between}
+          .kpi-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;
+                    border:1px solid currentColor;font-weight:800;font-size:12px;line-height:1}
+          .kpi-dot{width:7px;height:7px;border-radius:999px;background:currentColor;position:relative}
+          .kpi-dot::after{content:"";position:absolute;inset:-4px;border-radius:999px;border:2px solid currentColor;opacity:.35;animation:tpulse 1.6s ease-out infinite}
+          .kpi-num{font-weight:800}
+          .kpi-sub{font-size:12px;color:#6b7280}
+          .kpi-bar{height:8px;background:#eef2f7;border-radius:999px;overflow:hidden}
+          .kpi-fill{height:100%;width:0;background:currentColor;animation:fillGrow .6s ease forwards}
+          .k-accent{background:var(--k-bg);border-color:var(--k-border);box-shadow:0 8px 22px var(--k-shadow), inset 0 0 0 1px var(--k-border)}
+        `}</style>
 
-      {/* Title + description */}
-      <div className="page-header" style={{ marginBottom: 8 }}>
-        <h1 style={{ margin: 0 }}>Global Score</h1>
-        <p className="page-sub" style={{ margin: "4px 0 0" }}>
-          Cross-country normalized credit summary.
-        </p>
-        <p className="page-sub" style={{ margin: "2px 0 0", color: "#374151" }}>
-          Normalized from <strong>{originName}</strong> → <strong>{destName}</strong> • Last 30 days
-        </p>
-      </div>
+  
 
-      {/* Hub tiles */}
-      <div className="hub-grid compact" role="list" style={{ marginTop: 10 }}>
-        {sortedPages.map(({ to, label, desc, icon }) => (
-          <Link key={to} to={to} className="hub-card slim" role="listitem" title={desc}>
-            <div className="hub-icon small" aria-hidden>{icon}</div>
-            <div className="hub-main">
-              <div className="hub-title">{label}</div>
-              <div className="hub-desc">{desc}</div>
+        {/* Header */}
+        <header className="page-header" style={{ marginBottom: 8 }}>
+          <h1 style={{ margin: 0 }}>Global Score</h1>
+          <p className="page-sub" style={{ margin: "4px 0 0" }}>
+            Cross-country normalized credit summary.
+          </p>
+          <div
+            style={{
+              display: "inline-block",
+              marginTop: 6,
+              fontSize: 13,
+              color: "#374151",
+              background: "#ffffffcc",
+              border: "1px solid #d1d5db",
+              padding: "6px 10px",
+              borderRadius: 999,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Normalized from <strong>{COUNTRY_NAMES[originCode] || originCode}</strong> →{" "}
+            <strong>{COUNTRY_NAMES[destCode] || destCode}</strong> • Last 30 days
+          </div>
+        </header>
+
+        {/* 1) Overview strip (accented KPIs) */}
+        <section className="score-grid compact small" aria-label="Overview">
+          {/* Origin */}
+          <div
+            className="kpi"
+            style={{ color: tO.color }}
+          >
+            <div className="kpi-top">
+              <h3 style={{ margin: 0 }}>{oFlag} Origin</h3>
+              <span className="kpi-chip"><span className="kpi-dot" />{bandName(origin)}</span>
             </div>
-            <div className="hub-arrow" aria-hidden>→</div>
-          </Link>
-        ))}
-      </div>
+            <div><span className="kpi-num">{origin}</span> / 1000</div>
+            <div className="kpi-bar"><div className="kpi-fill" style={{ width: pct(origin) + "%"}} /></div>
+            <div className="kpi-sub">Health relative to maximum</div>
+          </div>
 
-      {/* KPI row (mini boxes) */}
-      <div className="score-grid compact small" style={{ marginTop: 8 }}>
-        <div className="score-tile sm">
-          <h3 style={{ textAlign: "center", marginTop: 0 }}>{oFlag} Origin</h3>
-          <div className="score-note" style={{ textAlign: "center" }}>
-            <strong>{origin}</strong> ({bandName(origin)})
+          {/* Destination */}
+          <div
+            className="kpi"
+            style={{ color: tD.color }}
+          >
+            <div className="kpi-top">
+              <h3 style={{ margin: 0 }}>{dFlag} Destination</h3>
+              <span className="kpi-chip"><span className="kpi-dot" />{bandName(dest)}</span>
+            </div>
+            <div><span className="kpi-num">{dest}</span> / 1000</div>
+            <div className="kpi-bar"><div className="kpi-fill" style={{ width: pct(dest) + "%"}} /></div>
+            <div className="kpi-sub">Health relative to maximum</div>
           </div>
-        </div>
-        <div className="score-tile sm">
-          <h3 style={{ textAlign: "center", marginTop: 0 }}>{dFlag} Destination</h3>
-          <div className="score-note" style={{ textAlign: "center" }}>
-            <strong>{dest}</strong> ({bandName(dest)})
-          </div>
-        </div>
-        <div className="score-tile sm">
-          <h3 style={{ textAlign: "center", marginTop: 0 }}>🌐 Global</h3>
-          <div className="score-note" style={{ textAlign: "center" }}>
-            <strong>{combined}</strong> ({bandName(combined)})
-          </div>
-        </div>
-      </div>
 
-      {/* Dials with flip-on-click */}
-      <div className="score-grid compact" style={{ marginTop: 10 }}>
-        <FlipDial title="Origin Score"      icon={oFlag} score={origin} />
-        <FlipDial title="Destination Score" icon={dFlag} score={dest} />
-        <FlipDial title="Global Score"      icon="🌐"   score={combined} />
+          {/* Global (accent) */}
+          <div
+            className="kpi k-accent"
+            style={{
+              color: tG.color,
+              // inject CSS vars for accent
+              ["--k-bg"]: tG.bg,
+              ["--k-border"]: tG.border,
+              ["--k-shadow"]: tG.shadow,
+            }}
+          >
+            <div className="kpi-top">
+              <h3 style={{ margin: 0 }}>🌐 Global</h3>
+              <span className="kpi-chip"><span className="kpi-dot" />{bandName(combined)}</span>
+            </div>
+            <div><span className="kpi-num">{combined}</span> / 1000</div>
+            <div className="kpi-bar"><div className="kpi-fill" style={{ width: pct(combined) + "%"}} /></div>
+            <div className="kpi-sub">Combined performance (avg of both)</div>
+          </div>
+        </section>
+
+        {/* 2) Quick modules grid */}
+        <section className="hub-grid compact" role="list" style={{ marginTop: 10 }}>
+          {sortedPages.map(({ to, label, desc, icon }) => (
+            <Link key={to} to={to} className="hub-card slim" role="listitem" title={desc}>
+              <div className="hub-icon small" aria-hidden>{icon}</div>
+              <div className="hub-main">
+                <div className="hub-title">{label}</div>
+                <div className="hub-desc">{desc}</div>
+              </div>
+              <div className="hub-arrow" aria-hidden>→</div>
+            </Link>
+          ))}
+        </section>
+
+        {/* 3) Gauges with flip-on-click */}
+        <section className="score-grid compact" style={{ marginTop: 10 }} aria-label="Scores">
+          <FlipDial title="Origin Score"      icon={oFlag} score={origin} />
+          <FlipDial title="Destination Score" icon={dFlag} score={dest} />
+          <FlipDial title="Global Score"      icon="🌐"   score={combined} />
+        </section>
       </div>
     </section>
   );
