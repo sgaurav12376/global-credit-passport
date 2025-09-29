@@ -27,7 +27,7 @@ jobs:
           aws-region: us-east-1   # update if needed
 
       - name: Upload to S3
-        run: aws s3 cp app.zip s3://credit-app-backend-auto/app.zip
+        run: aws s3 cp app.zip s3://credit-app-backend-auto-codedeploy/app.zip
 
       - name: Deploy with CodeDeploy
         run: |
