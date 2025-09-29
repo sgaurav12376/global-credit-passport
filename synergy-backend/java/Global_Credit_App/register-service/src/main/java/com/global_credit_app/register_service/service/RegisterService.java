@@ -6,47 +6,24 @@ import com.global_credit_app.register_service.model.User;
 import com.global_credit_app.register_service.repository.UserRepository;
 import com.nimbusds.jwt.SignedJWT;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class RegisterService {
 
     private final UserRepository userRepository;
-    private final CognitoClient cognitoClient;
-
-    public Optional<String> validateNewUser(UserDTO dto) {
-        if ((dto.getEmail() == null || dto.getEmail().isBlank()) &&
-                (dto.getPhoneNumber() == null || dto.getPhoneNumber().isBlank())) {
-            return Optional.of("Either email or phone number is required");
-        }
-        if (dto.getPassword() == null || dto.getPassword().isBlank()) {
-            return Optional.of("Password is required");
-        }
-
-        if (dto.getEmail() != null && !dto.getEmail().isBlank()
-                && userRepository.findByEmail(dto.getEmail().trim()).isPresent()) {
-            return Optional.of("Email already exists.");
-        }
-        if (dto.getPassportNumber() != null && !dto.getPassportNumber().isBlank()
-                && userRepository.findByPassportNumber(dto.getPassportNumber().trim()).isPresent()) {
-            return Optional.of("Passport number already registered.");
-        }
-        if (!dto.getPassword().equals(dto.getConfirmPassword())) {
-            return Optional.of("Password and confirm password do not match.");
-        }
-        return Optional.empty();
-    }
+    private final CognitoClient cognitoClient; // AWS code unchanged
 
     /** Do the full flow and return a response DTO */
     public RegisterResponseDTO registerAndLogin(UserDTO dto) {
-        final String email = dto.getEmail().trim();
+        final String email = safeTrim(dto.getEmail());
 
         // 1) Create/ensure user in Cognito and set password permanent
         cognitoClient.ensureUserWithPassword(email, dto.getPassword());
@@ -56,11 +33,17 @@ public class RegisterService {
 
         // 3) Save profile in RDS (NO password stored)
         User user = new User();
-        user.setPassportNumber(dto.getPassportNumber());
-        user.setFirstName(dto.getFirstName());
-        user.setLastName(dto.getLastName());
+        user.setFirstName(safeTrim(dto.getFirstName()));
+        user.setLastName(safeTrim(dto.getLastName()));
         user.setEmail(email);
-        user.setPhoneNumber(dto.getPhoneNumber());
+        user.setPhoneNumber(safeTrim(dto.getPhoneNumber()));
+        user.setCountry(safeTrim(dto.getCountry()));
+        user.setGender(safeTrim(dto.getGender()));
+        user.setNationalId(safeTrim(dto.getNationalId()));
+
+        // Parse ISO date (UI sends "YYYY-MM-DD"); if bad, store null (no validation)
+        user.setDateOfBirth(parseDate(dto.getDateOfBirth()));
+
         // DO NOT set password -> leave null
         userRepository.save(user);
 
@@ -77,6 +60,19 @@ public class RegisterService {
         resp.setRefreshToken(tokens.refreshToken());
         resp.setIdTokenClaims(claims);
         return resp;
+    }
+
+    private static String safeTrim(String s) {
+        return s == null ? null : s.trim();
+    }
+
+    private static LocalDate parseDate(String iso) {
+        if (iso == null || iso.isBlank()) return null;
+        try {
+            return LocalDate.parse(iso);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private Map<String, Object> safeDecodeClaims(String idToken) {

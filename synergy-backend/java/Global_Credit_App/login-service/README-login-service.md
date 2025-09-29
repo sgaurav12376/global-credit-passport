@@ -108,7 +108,7 @@ Requests from the frontend (React) can directly hit `http://localhost:8080/api/l
 Environment variables (used in `application.properties`):
 
 ```env
-SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/synergydb
+SPRING_DATASOURCE_URL:jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
 SPRING_DATASOURCE_USERNAME=postgres
 SPRING_DATASOURCE_PASSWORD=admin
 ```

@@ -1,9 +1,9 @@
 version: "3.8"
 
 x-common-env: &db_env
-  SPRING_DATASOURCE_URL: jdbc:postgresql://sachu01.c6reawuqi249.us-east-1.rds.amazonaws.com:5432/sachu
+  SPRING_DATASOURCE_URL: jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
   SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: sachu123
+  SPRING_DATASOURCE_PASSWORD: synergy123
 
 networks:
   default:
@@ -23,8 +23,8 @@ services:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_COGNITO_USERPOOL_ID: us-east-1_mPnp7FUWD
-      AWS_COGNITO_APP_CLIENT_ID: 4p8dsmf03m5hvpf1ta36q468ab
+      AWS_COGNITO_USERPOOL_ID: us-east-1_dRmaCVKxV
+      AWS_COGNITO_APP_CLIENT_ID: r55hcm1utobr91qsv6r0r8uva
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
@@ -45,8 +45,8 @@ services:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_COGNITO_USERPOOL_ID: us-east-1_mPnp7FUWD
-      AWS_COGNITO_APP_CLIENT_ID: 4p8dsmf03m5hvpf1ta36q468ab
+      AWS_COGNITO_USERPOOL_ID: us-east-1_dRmaCVKxV
+      AWS_COGNITO_APP_CLIENT_ID: r55hcm1utobr91qsv6r0r8uva
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
@@ -77,9 +77,9 @@ services:
     image: data-service:latest
     container_name: data-service
     environment:
-      DB_URL: jdbc:postgresql://sachu01.c6reawuqi249.us-east-1.rds.amazonaws.com:5432/sachu
+      DB_URL: jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
       DB_USER: postgres
-      DB_PASS: sachu123
+      DB_PASS: synergy123
     ports: ["8085:8085"]
     restart: unless-stopped
     healthcheck:
@@ -97,7 +97,6 @@ services:
     container_name: api-gateway
     ports: ["8080:8080"]
     environment:
-      # If your gateway needs to call services by DNS name inside the Docker network
       LOGIN_SERVICE_URL: http://login-service:8082
       REGISTER_SERVICE_URL: http://register-service:8081
       COUNTRY_SERVICE_URL: http://countrydetails-service:8083
