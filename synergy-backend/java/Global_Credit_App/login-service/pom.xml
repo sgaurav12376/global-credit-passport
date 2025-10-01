@@ -55,6 +55,20 @@
 			<artifactId>cognitoidentityprovider</artifactId>
 			<version>2.25.37</version>
 		</dependency>
+		<!-- Spring Boot Actuator -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<!-- build.gradle.kts or pom.xml -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-oauth2-jose</artifactId>
+		</dependency>
 
 		<!-- (Optional) Validate Bearer JWTs on endpoints later -->
 		<dependency>
