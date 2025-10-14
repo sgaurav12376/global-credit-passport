@@ -1,0 +1,7 @@
+raw_id,created_at,fip_id,fi_status,link_ref_number,masked_account_number,account_type,ifsc,currency,account_key
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,038a1042-622a-4e4d-a483-721c51381fd4,XXXXXXXX1405,term_deposit,,,7e092605e0b7343f9c882358ef651948
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,1fb527af-6776-47d9-bb70-561695c33bdd,XXXXXXXX1505,deposit,,,cce81c711094629fe6e52f71bac4f078
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,af82370b-8160-4938-9f5c-f2db0956bfce,XXXXXXXX2388,deposit,,,211d3f0748124de9c964819909fe714f
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,4f571782-b985-4379-b5c7-47ecbfadbd85,XXXXXXXX5457,recurring_deposit,,,ac69729d5986b3780510da366e3b2daf
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,5d858f39-2ab4-4b0e-b60c-45b7b672e7da,XXXXXXXX9434,term_deposit,,,8bb61fd8dbed5bf4d09ab8f6a048ddf1
+3,2025-10-09 21:53:13.629114-07,setu-fip,READY,2eb3f739-270a-442c-92fb-6c3f0ef1a167,XXXXXXXX9739,recurring_deposit,,,8ba5e31d5c2c9ce3b8331a8f7e5f3d6f

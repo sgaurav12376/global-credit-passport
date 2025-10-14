@@ -1,0 +1,7 @@
+raw_id,created_at,fip_id,masked_account_number,holder_name,holder_dob,holder_dob_raw,holder_pan,holder_email,holder_mobile,holder_masked_mobile,holder_address,holder_key
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX1405,Sumer Saha,1977-09-11,1977-09-11,FTMUQ2861N,jhanvibhakta@setu-dummy.com,1074972799,,"H.No. 87, Maharaj Circle&#10;Nagercoil 121668",9c505c8dd6e53e099a0de72af923e313
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX1505,Divyansh Mann,1982-05-28,1982-05-28,HPBUT0988E,daminithaman@setu-dummy.com,1571363950,,"65, Bhandari Circle, Rampur 990141",4dc9db99f7182a3279021941130165ae
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX2388,Anika Goel,1982-06-03,1982-06-03,GZKUF4508W,rheacomar@setu-dummy.com,1619089355,,"85/944, Chander, Jalandhar 294660",ade52a400b9ee5a8be342f593e9af061
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX5457,Umang Venkataraman,1977-06-26,1977-06-26,PKHJS7315E,seher74@setu-dummy.com,3078771983,,"797, Khare, Muzaffarpur-822040",483708f4cbece93e7aaea847c3620e7e
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX9434,Kavya Vora,1994-01-14,1994-01-14,CDWVV0513N,ylalla@setu-dummy.com,9650455833,,"H.No. 54, Dalal&#10;Dhule 747757",b52a902cd4674c998354e0de5e70e0e7
+3,2025-10-09 21:53:13.629114-07,setu-fip,XXXXXXXX9739,Tanya Sarna,1992-11-27,1992-11-27,NBMBH3148C,lkrishnamurthy@setu-dummy.com,3548876055,,"99/67, Lall Road&#10;Hubli&#8211;Dharwad 917928",6eba13f9c1096fc0a5f8e4618d4a2d85
