@@ -1,68 +1,63 @@
-data-service
+# 📊 Data-Service
 
-Spring Boot microservice that reads JSON-derived analytics views from Postgres (synergydb) and exposes UI-friendly JSON for the Global Credit App dashboard.
+Spring Boot microservice that reads analytics and credit data from **AWS RDS (PostgreSQL)** and exposes UI-friendly JSON for the **Global Credit App Dashboard**.
 
-Endpoints
+---
 
-GET /api/data/accounts?type=&subtype= – list of accounts with balances/limits
+## 🚀 Overview
+This service powers all backend dashboard APIs such as accounts, utilization, account mix, global score, and credit age.  
+It was originally reading from local PL/SQL views, but now fully connects to **AWS RDS** and uses the following tables:
+- `public.customer_data_test`
+- `public.transaction_detailed`
+- `public.indian_credit_data`
 
-GET /api/data/utilization – revolving utilization % across credit accounts
+---
 
-GET /api/data/account-mix – normalized account mix and diversity index (HHI)
+## ✅ Endpoints in `DataController`
+All of these endpoints are **live** (they read directly from RDS now):
 
-GET /api/data/active-accounts – total active accounts and total exposure
+| HTTP Method | Endpoint | Description | Backing Table(s) |
+|--------------|-----------|--------------|------------------|
+| **GET** | `/api/data/accounts` | Fetch all accounts, optionally filtered by `type` and `subtype`. | `public.customer_data_test` |
+| **GET** | `/api/data/utilization` | Revolving utilization ratio — currently **placeholder (null)** until balance / limit data is available. | — (TODO: will use new balance/limit table) |
+| **GET** | `/api/data/account-mix` | Distribution of exposure by category (`transaction_type_main`). | `public.transaction_detailed` |
+| **GET** | `/api/data/active-accounts` | Number of accounts with transactions in the last 90 days and their total exposure. | `public.transaction_detailed` |
+| **GET** | `/api/data/global-score` | Average credit score + qualitative banding. | `public.indian_credit_data` |
+| **GET** | `/api/data/credit-age` | Oldest and average account age (months between first & latest transactions). | `public.transaction_detailed` |
+| **GET** | `/api/data/payment-history` | Placeholder — returns zero counts until delinquency data available. | — (TODO) |
 
-GET /api/dashboard-data/overview – consolidated payload for dashboard (accounts + utilization)
+---
 
-These endpoints read views in the analytics schema that sit on top of your raw.* JSON tables. Make sure you created those views first.
+## ✅ Dashboard Endpoint in `DashboardDataController`
 
-Prerequisites
+| HTTP Method | Endpoint | Description | Returns |
+|--------------|-----------|--------------|----------|
+| **GET** | `/api/dashboard-data/overview` | Consolidated snapshot for the dashboard (fetches all sub-modules internally). | `{ accounts, utilization, accountMix, activeAccounts, creditAge, paymentHistory, globalScore }` |
 
-Postgres container: postgres-db
+---
 
-Database: synergydb (default user:  postgres / password: admin)
+## ⚙️ Prerequisites
 
-JSON already loaded into the eight raw.*_json tables (one row per document)
+| Component | Description |
+|------------|-------------|
+| **Database** | AWS RDS PostgreSQL instance (`synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com`) |
+| **DB Credentials** | `postgres / synergy123` |
+| **Schema** | `public` |
+| **JDK** | 21 (Eclipse Temurin or OpenJDK) |
+| **Build Tool** | Maven 3.9 + |
 
-Views created (see SQL pack we defined: vw_accounts, vw_revolving_utilization, vw_account_mix, vw_active_accounts)
+---
 
-Build & Run (local)
-# Ensure JDK 21 is used by both Maven and IDE
+## 🧰 Build & Run (Local)
+
+```bash
+# Ensure JDK 21 is active
 java -version
-javac -version
 mvn -v
 
-# Run with local Postgres, override URL if needed
+# Run with AWS RDS connection
 mvn -U clean spring-boot:run \
--Dspring-boot.run.jvmArguments="-DDB_URL=jdbc:postgresql://localhost:5432/synergydb -DDB_USER=postgres -DDB_PASS=admin"
-
-Example Requests
-Accounts
-curl "http://localhost:8085/api/data/accounts"
-curl "http://localhost:8085/api/data/accounts?type=depository"
-curl "http://localhost:8085/api/data/accounts?subtype=checking"
-curl "http://localhost:8085/api/data/accounts?type=credit"
-
-Utilization
-curl "http://localhost:8085/api/data/utilization"
-
-Account Mix
-curl "http://localhost:8085/api/data/account-mix"
-
-Active Accounts
-curl "http://localhost:8085/api/data/active-accounts"
-
-Dashboard Overview (accounts + utilization together)
-curl "http://localhost:8085/api/dashboard-data/overview"
-
-Global score 
-curl "http://localhost:8085/api/data/global-score"
-
-Credit-Age
-GET http://localhost:8085/api/data/credit-age
-
-Payment History
-GET http://localhost:8085/api/data/payment-history
-
-overveiw
-GET http://localhost:8085/api/dashboard-data/overview
+  -Dspring-boot.run.jvmArguments="\
+  -DDB_URL=jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require \
+  -DDB_USER=postgres \
+  -DDB_PASS=synergy123"
