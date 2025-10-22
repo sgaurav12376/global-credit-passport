@@ -1,0 +1,109 @@
+version: "3.8"
+
+x-common-env: &db_env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: synergy123
+
+networks:
+  default:
+    name: global-credit-network
+    driver: bridge
+
+services:
+  login-service:
+    build:
+      context: .
+      dockerfile: login-service/Dockerfile
+    image: login-service:latest
+    container_name: login-service
+    ports: ["8082:8082"]
+    environment:
+      <<: *db_env
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_COGNITO_USERPOOL_ID: us-east-1_dRmaCVKxV
+      AWS_COGNITO_APP_CLIENT_ID: r55hcm1utobr91qsv6r0r8uva
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  register-service:
+    build:
+      context: .
+      dockerfile: register-service/Dockerfile
+    image: register-service:latest
+    container_name: register-service
+    ports: ["8081:8081"]
+    environment:
+      <<: *db_env
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_COGNITO_USERPOOL_ID: us-east-1_dRmaCVKxV
+      AWS_COGNITO_APP_CLIENT_ID: r55hcm1utobr91qsv6r0r8uva
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  countrydetails-service:
+    build:
+      context: .
+      dockerfile: countrydetails-service/Dockerfile
+    image: countrydetails-service:latest
+    container_name: countrydetails-service
+    ports: ["8083:8083"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  data-service:
+    build:
+      context: .
+      dockerfile: data-service/Dockerfile
+    image: data-service:latest
+    container_name: data-service
+    environment:
+      DB_URL: jdbc:postgresql://synergy-db.c8lmu0ou87wx.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
+      DB_USER: postgres
+      DB_PASS: synergy123
+    ports: ["8085:8085"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    image: api-gateway:latest
+    container_name: api-gateway
+    ports: ["8080:8080"]
+    environment:
+      LOGIN_SERVICE_URL: http://login-service:8082
+      REGISTER_SERVICE_URL: http://register-service:8081
+      COUNTRY_SERVICE_URL: http://countrydetails-service:8083
+      DATA_SERVICE_URL: http://data-service:8085
+    depends_on:
+      - login-service
+      - register-service
+      - countrydetails-service
+      - data-service
+    restart: unless-stopped

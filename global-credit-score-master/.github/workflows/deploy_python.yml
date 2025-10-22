@@ -1,0 +1,36 @@
+name: Deploy Python Backend to EC2 via CodeDeploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Zip Python project
+        run: |
+          chmod +x scripts/*.sh
+          zip -r python_app.zip scripts appspec-python.yml synergy-backend/python
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Upload to S3
+        run: aws s3 cp python_app.zip s3://your-s3-bucket/python_app.zip
+
+      - name: Deploy with CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name creditapp-python \
+            --deployment-group-name CREDITAPP-PYTHON \
+            --s3-location bucket=your-s3-bucket,key=python_app.zip,bundleType=zip
