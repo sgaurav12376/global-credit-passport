@@ -1,3 +1,4 @@
+// src/main/java/com/global_credit_app/DataServiceApplication/service/DataService.java
 package com.global_credit_app.DataServiceApplication.service;
 
 import com.global_credit_app.DataServiceApplication.dto.*;
@@ -17,7 +18,7 @@ public class DataService {
 
     // Add inside DataService
 
-    public UtilizationDTO getUtilization() {
+    public UtilizationResponseDTO getUtilization() {
         return repo.getRevolvingUtilization();
     }
 
