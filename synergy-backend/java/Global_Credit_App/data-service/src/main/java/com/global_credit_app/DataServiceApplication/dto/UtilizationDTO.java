@@ -1,4 +1,9 @@
 package com.global_credit_app.DataServiceApplication.dto;
 
 import java.math.BigDecimal;
-public record UtilizationDTO(BigDecimal utilizationPercent) {}
+public record UtilizationDTO(
+        BigDecimal utilizationPercent,
+        BigDecimal currentBalance,
+        BigDecimal availableCredit,
+        BigDecimal overallLimit
+) {}

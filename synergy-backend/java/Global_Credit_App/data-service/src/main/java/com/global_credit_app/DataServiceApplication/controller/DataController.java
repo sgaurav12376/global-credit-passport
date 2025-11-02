@@ -20,7 +20,7 @@ public class DataController {
     }
 
     @GetMapping("/utilization")
-    public UtilizationDTO utilization() {
+    public UtilizationResponseDTO utilization() {
         return service.getUtilization();
     }
 
@@ -48,6 +48,10 @@ public class DataController {
         return service.getPaymentHistory();
     }
 
+    // Optional alias if your UI calls /credit-length
+    @GetMapping("/credit-length")
+    public CreditAgeDTO creditLength() {
+        return service.getCreditAge();
+    }
 
 }
-
