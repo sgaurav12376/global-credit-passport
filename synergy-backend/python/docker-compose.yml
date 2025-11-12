@@ -1,0 +1,23 @@
+version: "3.8"
+services:
+  python-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: python-backend:latest
+    container_name: python-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+networks:
+  default:
+    name: global-credit-network
+    driver: bridge
