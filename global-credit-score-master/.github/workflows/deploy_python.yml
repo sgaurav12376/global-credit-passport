@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'synergy-backend/python/**'
+      - 'scripts/before_install_python.sh'
+      - 'scripts/after_install_python.sh'
+      - 'scripts/start_app_python.sh'
+      - 'scripts/validate_service_python.sh'
+      - 'synergy-backend/python/appspec-python.yml'
+      - '.github/workflows/deploy_python.yml'
 
 jobs:
   deploy-python:
@@ -11,12 +19,34 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set ZIP name with version
+        id: vars
+        run: |
+          echo "ZIP_NAME=python_app_${GITHUB_RUN_NUMBER}_${GITHUB_SHA::8}.zip" >> $GITHUB_OUTPUT
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
 
       - name: Zip Python project
         run: |
-          chmod +x scripts/*.sh
-          zip -r python_app.zip scripts appspec-python.yml synergy-backend/python
+          echo "Creating deployment bundle: ${{ steps.vars.outputs.ZIP_NAME }}"
+          # Copy appspec to root for CodeDeploy (CodeDeploy expects appspec at root)
+          cp synergy-backend/python/appspec-python.yml appspec-python.yml
+          # Create zip with proper structure for CodeDeploy
+          # Structure: appspec-python.yml at root, scripts/ at root, synergy-backend/python/ at root
+          zip -r "${{ steps.vars.outputs.ZIP_NAME }}" \
+            synergy-backend/python \
+            scripts/before_install_python.sh \
+            scripts/after_install_python.sh \
+            scripts/start_app_python.sh \
+            scripts/validate_service_python.sh \
+            appspec-python.yml \
+            -x "*.git/*" "*.github/*" "*__pycache__/*" "*.pyc" "*.pyo" "*.pyd" "*.pytest_cache/*" "*.egg-info/*" "*.env" "venv/*"
+          echo "Deployment bundle contents:"
+          unzip -l "${{ steps.vars.outputs.ZIP_NAME }}" | head -20
+          ls -lh "${{ steps.vars.outputs.ZIP_NAME }}"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -26,7 +56,11 @@ jobs:
           aws-region: us-east-1
 
       - name: Upload to S3
-        run: aws s3 cp python_app.zip s3://your-s3-bucket/python_app.zip
+        env:
+          S3_BUCKET: ${{ secrets.S3_DEPLOY_BUCKET || 'credit-app-backend-auto-codedeploy' }}
+        run: |
+          aws s3 cp "${{ steps.vars.outputs.ZIP_NAME }}" "s3://${S3_BUCKET}/python/${{ steps.vars.outputs.ZIP_NAME }}"
+          echo "Uploaded to: s3://${S3_BUCKET}/python/${{ steps.vars.outputs.ZIP_NAME }}"
 
       - name: Deploy with CodeDeploy
         run: |

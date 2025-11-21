@@ -16,3 +16,7 @@ hooks:
     - location: scripts/start_app_python.sh
       timeout: 300
       runas: ubuntu
+  ValidateService:
+    - location: scripts/validate_service_python.sh
+      timeout: 60
+      runas: ubuntu
