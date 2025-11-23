@@ -1,2 +1,16 @@
 .env
 **/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# macOS
+.DS_Store
+**/.DS_Store

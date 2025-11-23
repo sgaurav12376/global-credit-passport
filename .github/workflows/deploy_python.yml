@@ -1,0 +1,60 @@
+name: Deploy Python Backend to EC2 via CodeDeploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'synergy-backend/python/**'
+      - 'scripts/before_install_python.sh'
+      - 'scripts/after_install_python.sh'
+      - 'scripts/start_app_python.sh'
+      - 'synergy-backend/python/appspec-python.yml'
+
+jobs:
+  deploy-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Package Python application
+        run: |
+          # Make scripts executable
+          chmod +x scripts/before_install_python.sh
+          chmod +x scripts/after_install_python.sh
+          chmod +x scripts/start_app_python.sh
+          
+          # Create deployment bundle structure
+          # CodeDeploy requires appspec.yml at root of zip
+          mkdir -p deploy-bundle
+          cp synergy-backend/python/appspec-python.yml deploy-bundle/appspec-python.yml
+          cp -r scripts deploy-bundle/
+          cp -r synergy-backend/python deploy-bundle/synergy-backend/python
+          
+          # Create versioned zip file
+          cd deploy-bundle
+          ZIP_NAME="python_app_${{ github.run_number }}_${{ github.sha }}.zip"
+          zip -r "../${ZIP_NAME}" .
+          cd ..
+          echo "ZIP_FILE=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp ${ZIP_FILE} s3://${{ secrets.S3_BUCKET || 'credit-app-backend-auto-codedeploy' }}/python/${ZIP_FILE}
+
+      - name: Create CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name ${{ secrets.CODEDEPLOY_APP_NAME || 'creditapp-python' }} \
+            --deployment-group-name ${{ secrets.CODEDEPLOY_DEPLOY_GROUP || 'CREDITAPP-PYTHON' }} \
+            --s3-location bucket=${{ secrets.S3_BUCKET || 'credit-app-backend-auto-codedeploy' }},key=python/${ZIP_FILE},bundleType=zip
+
