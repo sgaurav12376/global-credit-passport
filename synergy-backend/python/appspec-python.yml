@@ -2,17 +2,17 @@ version: 0.0
 os: linux
 files:
   - source: synergy-backend/python
-    destination: /home/ubuntu/app/synergy-backend/python
+    destination: /home/ec2-user/app/synergy-backend/python
 hooks:
   BeforeInstall:
     - location: scripts/before_install_python.sh
       timeout: 300
-      runas: ubuntu
+      runas: ec2-user
   AfterInstall:
     - location: scripts/after_install_python.sh
       timeout: 600
-      runas: ubuntu
+      runas: ec2-user
   ApplicationStart:
     - location: scripts/start_app_python.sh
       timeout: 300
-      runas: ubuntu
+      runas: ec2-user
