@@ -21,21 +21,22 @@ jobs:
 
       - name: Package Python application
         run: |
-          # Make scripts executable
           chmod +x scripts/before_install_python.sh
           chmod +x scripts/after_install_python.sh
           chmod +x scripts/start_app_python.sh
           
-          # Create deployment bundle structure
-          # CodeDeploy requires appspec.yml at root of zip
           mkdir -p deploy-bundle
+
           cp synergy-backend/python/appspec-python.yml deploy-bundle/appspec-python.yml
           cp -r scripts deploy-bundle/
-          cp -r synergy-backend/python deploy-bundle/synergy-backend/python
+
+          # FIX: create parent folder before copying
+          mkdir -p deploy-bundle/synergy-backend
+
+          cp -r synergy-backend/python deploy-bundle/synergy-backend/
           
-          # Create versioned zip file
           cd deploy-bundle
-          ZIP_NAME="python_app_${{ github.run_number }}_${{ github.sha }}.zip"
+          ZIP_NAME="python_app_${GITHUB_RUN_NUMBER}_${GITHUB_SHA}.zip"
           zip -r "../${ZIP_NAME}" .
           cd ..
           echo "ZIP_FILE=${ZIP_NAME}" >> $GITHUB_ENV
@@ -45,16 +46,15 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload to S3
         run: |
-          aws s3 cp ${ZIP_FILE} s3://${{ secrets.S3_BUCKET || 'credit-app-backend-auto-codedeploy' }}/python/${ZIP_FILE}
+          aws s3 cp "${{ env.ZIP_FILE }}" "s3://${{ secrets.S3_BUCKET }}/python/${{ env.ZIP_FILE }}"
 
       - name: Create CodeDeploy deployment
         run: |
           aws deploy create-deployment \
-            --application-name ${{ secrets.CODEDEPLOY_APP_NAME || 'creditapp-python' }} \
-            --deployment-group-name ${{ secrets.CODEDEPLOY_DEPLOY_GROUP || 'CREDITAPP-PYTHON' }} \
-            --s3-location bucket=${{ secrets.S3_BUCKET || 'credit-app-backend-auto-codedeploy' }},key=python/${ZIP_FILE},bundleType=zip
-
+            --application-name "${{ secrets.CODEDEPLOY_APP_NAME }}" \
+            --deployment-group-name "${{ secrets.CODEDEPLOY_DEPLOY_GROUP }}" \
+            --s3-location bucket=${{ secrets.S3_BUCKET }},key=python/${{ env.ZIP_FILE }},bundleType=zip
