@@ -27,7 +27,7 @@ jobs:
           
           mkdir -p deploy-bundle
 
-            cp synergy-backend/python/appspec-python.yml deploy-bundle/appspec-python.yml
+            cp synergy-backend/python/appspec-python.yml deploy-bundle/appspec.yml
           # FIX: create parent folder before copying
           mkdir -p deploy-bundle/synergy-backend
 
