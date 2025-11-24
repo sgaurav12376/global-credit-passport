@@ -35,3 +35,5 @@ jobs:
             --application-name synergy-resources-LLC \
             --deployment-group-name Credit-App-DG \
             --s3-location bucket=credit-app-backend-auto-codedeploy,key=app.zip,bundleType=zip
+
+           
