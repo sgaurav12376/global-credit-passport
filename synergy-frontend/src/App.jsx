@@ -1,3 +1,4 @@
+// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider } from "./synergy_resources/credit_app/context/AuthContext";
 import ProtectedRoute from "./synergy_resources/credit_app/components/ProtectedRoute";
@@ -7,27 +8,32 @@ import Topbar from "./synergy_resources/credit_app/components/Topbar";
 import Footer from "./synergy_resources/credit_app/components/Footer";
 import Toaster from "./synergy_resources/credit_app/components/Toaster";
 
-// Auth pages
+// Score pages
+import OriginScore from "./synergy_resources/credit_app/pages/dashboard/OriginScore.jsx";
+import DestinationScore from "./synergy_resources/credit_app/pages/dashboard/DestinationScore.jsx";
+import GlobalAverage from "./synergy_resources/credit_app/pages/dashboard/GlobalAverage.jsx";
+
+// Auth (public)
 import Login from "./synergy_resources/credit_app/pages/Auth/signin/Login";
 import Signup from "./synergy_resources/credit_app/pages/Auth/signup/Signup";
 
-// Dashboard pages
+// Static (public)
+import Terms from "./synergy_resources/credit_app/pages/Static/Terms";
+import Privacy from "./synergy_resources/credit_app/pages/Static/Privacy";
+import About from "./synergy_resources/credit_app/pages/Static/About";
+import Contact from "./synergy_resources/credit_app/pages/Static/Contact";
+
+// Dashboard pages (protected)
+import AccountsOverview from "./synergy_resources/credit_app/pages/dashboard/AccountsOverview";
+import CreditHistory from "./synergy_resources/credit_app/pages/dashboard/CreditHistory";
+import BehaviorTrends from "./synergy_resources/credit_app/pages/dashboard/BehaviorTrends";
+import RiskProfile from "./synergy_resources/credit_app/pages/dashboard/RiskProfile";
+import BankingInsights from "./synergy_resources/credit_app/pages/dashboard/BankingInsights";
+import GlobalComparison from "./synergy_resources/credit_app/pages/dashboard/GlobalComparison";
 import GlobalScore from "./synergy_resources/credit_app/pages/dashboard/GlobalScore";
-import ScoreScale from "./synergy_resources/credit_app/pages/dashboard/ScoreScale";
-import PaymentHistory from "./synergy_resources/credit_app/pages/dashboard/PaymentHistory";
-import Utilization from "./synergy_resources/credit_app/pages/dashboard/Utilization";
-import CreditLength from "./synergy_resources/credit_app/pages/dashboard/CreditLength";
-import AccountMix from "./synergy_resources/credit_app/pages/dashboard/AccountMix";
-import ActiveAccounts from "./synergy_resources/credit_app/pages/dashboard/ActiveAccounts";
 import ActiveAccountDetail from "./synergy_resources/credit_app/pages/dashboard/ActiveAccountDetail";
-import Inquiries from "./synergy_resources/credit_app/pages/dashboard/Inquiries";
-import AdverseRecords from "./synergy_resources/credit_app/pages/dashboard/AdverseRecords";
-import RecentBehavior from "./synergy_resources/credit_app/pages/dashboard/RecentBehavior";
-import AltData from "./synergy_resources/credit_app/pages/dashboard/AltData";
-import Banking from "./synergy_resources/credit_app/pages/dashboard/Banking";
-import CountryNormalization from "./synergy_resources/credit_app/pages/dashboard/CountryNormalization";
 
-
+// ---------- Layouts ----------
 function DashboardLayout() {
   return (
     <div className="app">
@@ -44,35 +50,74 @@ function DashboardLayout() {
   );
 }
 
+function PublicLayout() {
+  return (
+    <div className="app">
+      <div className="content">
+        <Topbar />
+        <main className="main">
+          <Outlet />
+        </main>
+        <Footer />
+        <Toaster />
+      </div>
+    </div>
+  );
+}
+
+// ---------- App ----------
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public */}
-          {/* uncoomment below 2 lines for live */}
-          
+          {/* Public: auth */}
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} /> 
+          <Route path="/signup" element={<Signup />} />
 
-          {/* Protected shell */}
+          {/* Public: static */}
+          <Route element={<PublicLayout />}>
+            <Route path="/legal/terms" element={<Terms />} />
+            <Route path="/legal/privacy" element={<Privacy />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+          </Route>
+
+          {/* Protected: dashboard */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
               <Route path="/" element={<Navigate to="/score" replace />} />
               <Route path="/score" element={<GlobalScore />} />
-              <Route path="/score-scale" element={<ScoreScale />} />
-              <Route path="/payment-history" element={<PaymentHistory />} />
-              <Route path="/utilization" element={<Utilization />} />
-              <Route path="/credit-length" element={<CreditLength />} />
-              <Route path="/account-mix" element={<AccountMix />} />
-              <Route path="/active-accounts" element={<ActiveAccounts />} />
+
+              {/* NEW: separate pages for origin/destination/global */}
+              <Route path="/score-origin" element={<OriginScore />} />
+              <Route path="/score-destination" element={<DestinationScore />} />
+              <Route path="/score-global" element={<GlobalAverage />} />
+
+              {/* Main sections */}
+              <Route path="/accounts-overview" element={<AccountsOverview />} />
+              <Route path="/credit-history" element={<CreditHistory />} />
+              <Route path="/behavior-trends" element={<BehaviorTrends />} />
+              <Route path="/risk-profile" element={<RiskProfile />} />
+              <Route path="/banking-insights" element={<BankingInsights />} />
+              <Route path="/global-comparison" element={<GlobalComparison />} />
+
+              {/* Detail */}
               <Route path="/active-accounts/:id" element={<ActiveAccountDetail />} />
-              <Route path="/inquiries" element={<Inquiries />} />
-              <Route path="/adverse-records" element={<AdverseRecords />} />
-              <Route path="/recent-behavior" element={<RecentBehavior />} />
-              <Route path="/alt-data" element={<AltData />} />
-              <Route path="/banking" element={<Banking />} />
-              <Route path="/country-normalization" element={<CountryNormalization />} />
+
+              {/* Legacy redirects */}
+              <Route path="/active-accounts" element={<Navigate to="/accounts-overview" replace />} />
+              <Route path="/account-mix" element={<Navigate to="/accounts-overview" replace />} />
+              <Route path="/utilization" element={<Navigate to="/accounts-overview" replace />} />
+              <Route path="/payment-history" element={<Navigate to="/credit-history" replace />} />
+              <Route path="/credit-length" element={<Navigate to="/credit-history" replace />} />
+              <Route path="/recent-behavior" element={<Navigate to="/behavior-trends" replace />} />
+              <Route path="/inquiries" element={<Navigate to="/behavior-trends" replace />} />
+              <Route path="/adverse-records" element={<Navigate to="/risk-profile" replace />} />
+              <Route path="/alt-data" element={<Navigate to="/risk-profile" replace />} />
+              <Route path="/banking" element={<Navigate to="/banking-insights" replace />} />
+              <Route path="/country-normalization" element={<Navigate to="/global-comparison" replace />} />
+              <Route path="/score-scale" element={<Navigate to="/global-comparison" replace />} />
             </Route>
           </Route>
 

@@ -1,4 +1,44 @@
+// src/synergy_resources/credit_app/components/Footer.jsx
+import { useState } from "react";
+import { Link } from "react-router-dom";
+
+// Use your backend URL from .env (Vite) → VITE_NEWSLETTER_URL
+// Fallback keeps working if your backend mounted it at this path.
+const ENDPOINT =
+  import.meta?.env?.VITE_NEWSLETTER_URL || "/api/newsletter/subscribe";
+
 export default function Footer() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState("idle"); // idle | loading | ok | err
+  const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (!isValid || status === "loading") return;
+
+    setStatus("loading");
+    try {
+      const r = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "web" }),
+        credentials: "include",
+      });
+
+      let ok = r.ok;
+      try {
+        const j = await r.clone().json();
+        ok = ok && (j?.ok || j?.success || j?.status === "ok" || j === true);
+      } catch {/* non-JSON fine */}
+
+      if (!ok) throw new Error("subscribe failed");
+      setStatus("ok");
+      setEmail("");
+    } catch {
+      setStatus("err");
+    }
+  }
+
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -6,27 +46,41 @@ export default function Footer() {
         <div className="footer-left">
           <p>© {new Date().getFullYear()} Global Credit App</p>
           <nav className="footer-links">
-            <a href="#">Terms</a>
-            <a href="#">Privacy</a>
-            <a href="#">About</a>
-            <a href="#">Contact</a>
+            <Link to="/legal/terms">Terms</Link>
+            <Link to="/legal/privacy">Privacy</Link>
+            <Link to="/about">About</Link>
+            <Link to="/contact">Contact</Link>
           </nav>
         </div>
 
         {/* Center: newsletter */}
         <div className="footer-news">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              alert("Subscribed!");
-            }}
-          >
-            <input type="email" placeholder="Subscribe newsletter…" required />
-            <button type="submit" aria-label="Subscribe">→</button>
+          <form onSubmit={onSubmit} noValidate>
+            <input
+              type="email"
+              placeholder="Subscribe newsletter…"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setStatus("idle"); }}
+              aria-invalid={email ? String(!isValid) : "false"}
+              aria-describedby="nl-msg"
+              required
+            />
+            <button
+              type="submit"
+              aria-label="Subscribe"
+              disabled={!isValid || status === "loading"}
+              title={isValid ? "Subscribe" : "Enter a valid email"}
+            >
+              {status === "loading" ? "…" : "→"}
+            </button>
           </form>
+          <div id="nl-msg" className={`nl-msg ${status}`} aria-live="polite">
+            {status === "ok" && "Thanks! Check your inbox."}
+            {status === "err" && "Could not subscribe. Try again."}
+          </div>
         </div>
 
-        {/* Right: socials with SVG icons */}
+        {/* Right: socials */}
         <div className="footer-socials">
           <a href="#" aria-label="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
