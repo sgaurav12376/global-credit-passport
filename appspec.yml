@@ -20,3 +20,17 @@ hooks:
     - location: scripts/start_app.sh
       timeout: 300
       runas: ubuntu
+
+hooks:
+  BeforeInstall:
+    - location: scripts/before_install_python.sh
+      timeout: 300
+      runas: ubuntu
+  AfterInstall:
+    - location: scripts/after_install_python.sh
+      timeout: 600
+      runas: ubuntu
+  ApplicationStart:
+    - location: scripts/start_app_python.sh
+      timeout: 300
+      runas: ubuntu
