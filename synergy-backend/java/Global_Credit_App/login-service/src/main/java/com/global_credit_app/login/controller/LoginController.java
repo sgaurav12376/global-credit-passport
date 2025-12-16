@@ -13,13 +13,17 @@ public class LoginController {
     @Autowired
     private LoginService loginService;
 
-    @PostMapping(value = "/login", produces = "application/json")
-    public ResponseEntity<ApiResponse<LoginResponseDTO>> login(@RequestBody LoginRequestDTO loginRequest) {
+    @PostMapping(value = {"/login", "/login/"}, produces = "application/json")
+    public ResponseEntity<ApiResponse<LoginResponseDTO>> login(
+            @RequestBody LoginRequestDTO loginRequest) {
         return loginService.login(loginRequest);
     }
 
-    @PostMapping(value = "/signup", produces = "application/json")
-    public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(@RequestBody SignupRequestDTO signupRequest) {
+    @PostMapping(value = {"/signup", "/signup/"}, produces = "application/json")
+    public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(
+            @RequestBody SignupRequestDTO signupRequest) {
         return loginService.signup(signupRequest);
     }
 }
+
+
