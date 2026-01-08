@@ -1,0 +1,12 @@
+{
+  "MAE_points": 56.28537669354999,
+  "RMSE_points": 70.18548058679306,
+  "Mean_abs_gap": 56.28537669354999,
+  "Pct_within_20": 20.833333333333336,
+  "Pct_within_40": 42.5,
+  "Pct_within_60": 61.25000000000001,
+  "n_train": 960,
+  "n_test": 240,
+  "n_features": 35,
+  "n_cw_features": 25
+}

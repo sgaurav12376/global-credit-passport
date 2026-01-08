@@ -1,0 +1,26 @@
+pillar,metric_name,formula,required_columns
+Capacity,cw_monthly_spend_est,total_spend / 12,['total_spend']
+Capacity,cw_net_cashflow,monthly_salary - cw_monthly_spend_est,"['monthly_salary', 'total_spend']"
+Capacity,cw_spend_to_income,cw_monthly_spend_est / (monthly_salary+eps),"['monthly_salary', 'total_spend']"
+Capacity,cw_savings_rate,cw_net_cashflow / (monthly_salary+eps),"['monthly_salary', 'total_spend']"
+Capacity,cw_income_sufficiency_flag,1 if cw_net_cashflow>=0 else 0,"['monthly_salary', 'total_spend']"
+Liquidity,cw_available_credit,revolving_limit_sum - revolving_balance_sum,"['revolving_limit_sum', 'revolving_balance_sum']"
+Liquidity,cw_credit_buffer_ratio,cw_available_credit / (monthly_salary+eps),"['revolving_limit_sum', 'revolving_balance_sum', 'monthly_salary']"
+Liquidity,cw_utilization,revolving_utilization (as is),['revolving_utilization']
+Leverage,cw_total_balance_to_income,total_balance_sum / (monthly_salary+eps),"['total_balance_sum', 'monthly_salary']"
+Leverage,cw_revolving_balance_to_income,revolving_balance_sum / (monthly_salary+eps),"['revolving_balance_sum', 'monthly_salary']"
+Discipline,cw_overspend_flag,1 if cw_net_cashflow<0 else 0,"['monthly_salary', 'total_spend']"
+Discipline,cw_tx_intensity,total_tx / (monthly_salary+eps),"['total_tx', 'monthly_salary']"
+Discipline,cw_cash_intensity_30d,beh_cash_intensity_30d (as is),['beh_cash_intensity_30d']
+Discipline,cw_expense_entropy_30d,cf_expense_entropy_30d (as is),['cf_expense_entropy_30d']
+Stress,cw_delinquency_count,delinq_24mo_count (as is),['delinq_24mo_count']
+Stress,cw_worst_delinquency,worst_delinq_24mo (as is),['worst_delinq_24mo']
+Stress,cw_collection_flag,has_collection (as is),['has_collection']
+Stress,cw_collection_balance,collection_balance_total (as is),['collection_balance_total']
+Stress,cw_bankruptcy_flag,has_bankruptcy (as is),['has_bankruptcy']
+Stress,cw_inquiry_hard_intensity,inquiries_12mo_hard / (tradelines_total+1),"['inquiries_12mo_hard', 'tradelines_total']"
+Seasonality,cw_seasonality_index_12m,beh_seasonality_index_12m (as is),['beh_seasonality_index_12m']
+Seasonality,cw_holiday_spike_flag,beh_holiday_spike_flag (as is),['beh_holiday_spike_flag']
+History,cw_thin_file_flag,1 if tradelines_total<3 else 0,['tradelines_total']
+History,cw_months_since_oldest,months_since_oldest_account (as is),['months_since_oldest_account']
+History,cw_avg_account_age,avg_account_age_months (as is),['avg_account_age_months']

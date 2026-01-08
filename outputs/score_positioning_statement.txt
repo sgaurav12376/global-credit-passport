@@ -1,0 +1,72 @@
+BEHAVIORAL CREDITWORTHINESS SCORE - POSITIONING STATEMENT
+=========================================================
+
+What This Score Measures:
+------------------------
+Synergy's Behavioral Creditworthiness Score measures how responsibly a customer manages 
+money over time using our transactional and behavioral data. It provides a real-time 
+signal of financial responsibility that complements (not replaces) bureau scores.
+
+Key Characteristics:
+--------------------
+✓ Measures REAL behavior: Based on actual spending, savings, and financial patterns
+✓ Real-time signal: Reacts immediately to behavioral changes
+✓ Explainable: Each feature directly reflects a behavioral dimension
+✓ Economically valid: Directionality is correct (good behavior → higher score)
+
+How It Differs from Bureau Scores:
+-----------------------------------
+- Bureau scores (FICO): Historical credit behavior, updated slowly
+- Behavioral score: Real-time financial responsibility, updated monthly
+- Gaps are STRUCTURAL, not errors:
+  * Holiday months (Oct-Dec): Behavioral model reacts to spending changes immediately;
+    bureau scores update slowly → larger gaps are expected and explainable
+  * Behavioral changes: Our score captures recent behavior changes faster than
+    bureau scores can reflect them
+
+When to Use This Score:
+-----------------------
+✓ Early warning signals for behavioral changes
+✓ Understanding customer financial health in real-time
+✓ Complementing bureau scores with behavioral intelligence
+✓ Explaining why a customer looks risky using our own data
+
+When NOT to Use This Score:
+---------------------------
+✗ As a replacement for bureau scores
+✗ For regulatory compliance (use bureau scores)
+✗ When historical credit behavior is the primary concern
+
+Consumer creditworthiness is the ability and willingness of a customer to meet financial 
+obligations on time, measured through:
+
+1. REPAYMENT CAPACITY: Can the customer afford their obligations?
+   - Net cashflow (income - spending)
+   - Savings rate
+   - Income sufficiency
+
+2. LIQUIDITY & BUFFERS: Does the customer have financial buffers?
+   - Available credit
+   - Credit buffer ratio
+   - Utilization rates
+
+3. SPENDING DISCIPLINE: Is spending controlled and predictable?
+   - Overspend flags
+   - Transaction intensity
+   - Expense entropy
+
+4. FINANCIAL STRESS: Are there warning signals?
+   - Delinquencies
+   - Collections
+   - Bankruptcies
+   - High inquiry rates
+
+5. SEASONALITY & TIMING: How does behavior vary by time?
+   - Holiday spending spikes
+   - Seasonal patterns
+   - Year-end effects
+
+6. BEHAVIORAL CONSISTENCY: Is behavior stable over time?
+   - Account age
+   - File thickness
+   - Historical patterns
