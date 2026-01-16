@@ -759,21 +759,24 @@ def robustness_testing(df: pd.DataFrame, target: str, period_col: Optional[str] 
         )
         # Ensure index alignment with df_clean
         df_with_period.index = df_clean.index
-        df_with_period = df_with_period[df_with_period[period_col].notna()]
         
-        if len(df_with_period) > 0:
+        # Create masks before filtering - aligned with df_clean index
+        has_period_mask = df_with_period[period_col].notna()
+        df_with_period_filtered = df_with_period[has_period_mask]
+        
+        if len(df_with_period_filtered) > 0:
             # Convert period to sortable format (assuming it's numeric or date-like)
             try:
-                periods = sorted(df_with_period[period_col].unique())
+                periods = sorted(df_with_period_filtered[period_col].unique())
                 if len(periods) >= 2:
                     # Split: train on first 70% of periods, test on last 30%
                     split_idx = int(len(periods) * 0.7)
                     train_periods = periods[:split_idx]
                     test_periods = periods[split_idx:]
                     
-                    # Create masks aligned with df_clean index
-                    train_mask = df_with_period[period_col].isin(train_periods)
-                    test_mask = df_with_period[period_col].isin(test_periods)
+                    # Create masks aligned with df_clean index (before filtering)
+                    train_mask = has_period_mask & df_with_period[period_col].isin(train_periods)
+                    test_mask = has_period_mask & df_with_period[period_col].isin(test_periods)
                     
                     if train_mask.sum() > 50 and test_mask.sum() > 20:
                         X_train_time = X.loc[train_mask].copy()
@@ -782,7 +785,7 @@ def robustness_testing(df: pd.DataFrame, target: str, period_col: Optional[str] 
                         y_test_time = y.loc[test_mask].copy()
                         
                         report, _, _ = train_rf_with_features(
-                            df_with_period, target, all_features,
+                            df_clean, target, all_features,
                             X_train_time, X_test_time, y_train_time, y_test_time
                         )
                         if report:
@@ -856,12 +859,15 @@ def robustness_testing(df: pd.DataFrame, target: str, period_col: Optional[str] 
         )
         # Ensure index alignment with df_clean
         df_with_period.index = df_clean.index
-        df_with_period = df_with_period[df_with_period[period_col].notna()]
         
-        if len(df_with_period) > 0:
+        # Create masks before filtering - aligned with df_clean index
+        has_period_mask = df_with_period[period_col].notna()
+        
+        if has_period_mask.sum() > 0:
             # Identify holiday months (where holiday spike flag is high)
-            holiday_mask = df_with_period["cw_holiday_spike_flag"] == 1
-            non_holiday_mask = df_with_period["cw_holiday_spike_flag"] == 0
+            # Use original df_clean index for masks
+            holiday_mask = has_period_mask & (df_with_period["cw_holiday_spike_flag"] == 1)
+            non_holiday_mask = has_period_mask & (df_with_period["cw_holiday_spike_flag"] == 0)
             
             if holiday_mask.sum() > 20 and non_holiday_mask.sum() > 50:
                 X_train_holiday = X.loc[non_holiday_mask].copy()
@@ -870,7 +876,7 @@ def robustness_testing(df: pd.DataFrame, target: str, period_col: Optional[str] 
                 y_test_holiday = y.loc[holiday_mask].copy()
                 
                 report, _, _ = train_rf_with_features(
-                    df_with_period, target, all_features,
+                    df_clean, target, all_features,
                     X_train_holiday, X_test_holiday, y_train_holiday, y_test_holiday
                 )
                 if report:
