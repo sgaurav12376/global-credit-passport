@@ -579,8 +579,8 @@ def robustness_testing(df: pd.DataFrame, target: str, period_col: Optional[str] 
     
     all_features = cw_cols + other_cols[:10]  # Limit non-cw features
     
-    # Remove rows with missing target
-    df_clean = df[all_features + [target]].copy()
+    # Remove rows with missing target - include ID_COL for merging later
+    df_clean = df[all_features + [target, ID_COL]].copy()
     df_clean = df_clean[df_clean[target].notna()]
     
     X = df_clean[all_features].copy()
