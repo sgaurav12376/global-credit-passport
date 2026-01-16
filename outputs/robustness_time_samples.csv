@@ -1,0 +1,2 @@
+,MAE_points,RMSE_points,Mean_abs_gap,Pct_within_20,Pct_within_40,Pct_within_60,n_train,n_test,n_features,train_periods,test_periods
+temporal_split,58.311140829511885,76.78807420234071,58.311140829511885,27.083333333333332,47.91666666666667,64.58333333333334,107,48,35,"['2023-10', '2023-11']",['2023-12']
