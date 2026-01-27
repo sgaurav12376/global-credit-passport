@@ -1,0 +1,9 @@
+terraform {
+  backend "s3" {
+    bucket         = "synergy-terraform-state-REPLACE_ME"
+    key            = "gcp/dev/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "synergy-terraform-locks"
+    encrypt        = true
+  }
+}
