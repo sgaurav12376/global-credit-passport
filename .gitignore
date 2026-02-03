@@ -50,3 +50,16 @@ tfplan
 .DS_Store
 # Generated outputs
 outputs-*.json
+
+# Java / Maven
+**/target/
+*.class
+*.log
+
+# Terraform local
+**/.terraform/
+*.tfplan
+.terraform.lock.hcl
+
+# macOS
+.DS_Store
