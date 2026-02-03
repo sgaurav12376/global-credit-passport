@@ -24,3 +24,29 @@ ENV/
 
 # Terraform generated outputs
 outputs-*.json
+
+# Terraform local state / working dirs
+**/.terraform/
+**/.terraform/*
+*.tfplan
+tfplan
+# Terraform backups / editor leftovers
+*.bak
+*.bak2
+*~
+.DS_Store
+# Generated outputs
+outputs-*.json
+
+# Terraform local artifacts
+**/.terraform/
+**/.terraform/*
+*.tfplan
+tfplan
+# editor / backup files
+*.bak
+*.bak2
+*~
+.DS_Store
+# Generated outputs
+outputs-*.json
