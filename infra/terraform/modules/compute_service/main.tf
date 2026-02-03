@@ -1,20 +1,23 @@
-variable "project"            { type = string }
-variable "service_name"       { type = string }
-variable "vpc_id"             { type = string }
+variable "project" { type = string }
+variable "service_name" { type = string }
+variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
-variable "instance_sg_id"     { type = string }
-variable "alb_sg_id"          { type = string }
+variable "instance_sg_id" { type = string }
+variable "alb_sg_id" { type = string }
 
 variable "container_port" { type = number }
-variable "ecr_repo_url"   { type = string }
-variable "image_tag"      { type = string }
+variable "ecr_repo_url" { type = string }
+variable "image_tag" { type = string }
 
 data "aws_region" "current" {}
 
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
-  filter { name = "name", values = ["al2023-ami-*-x86_64"] }
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
 }
 
 resource "aws_iam_role" "ec2_role" {
@@ -22,21 +25,21 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_readonly" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn  = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 resource "aws_iam_role_policy_attachment" "cw_agent" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn  = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
 resource "aws_iam_instance_profile" "profile" {
@@ -56,12 +59,10 @@ locals {
     systemctl start docker
 
     REGION="${data.aws_region.current.name}"
-    REPO="${var.ecr_repo_url}"
-    TAG="${var.image_tag}"
 
-    aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$(echo "$REPO" | cut -d/ -f1)"
+    aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$(echo "${var.ecr_repo_url}" | cut -d/ -f1)"
 
-    docker pull "${REPO}:${TAG}"
+    docker pull "${var.ecr_repo_url}:${var.image_tag}"
 
     # stop old container if exists
     docker rm -f ${var.service_name} || true
@@ -69,7 +70,7 @@ locals {
     docker run -d --restart=always \
       --name ${var.service_name} \
       -p ${var.container_port}:${var.container_port} \
-      "${REPO}:${TAG}"
+      "${var.ecr_repo_url}:${var.image_tag}"
   EOF
 }
 
@@ -100,10 +101,10 @@ resource "aws_lb_target_group" "tg" {
   target_type = "instance"
 
   health_check {
-    path    = "/health"
-    matcher = "200"
-    interval = 15
-    timeout  = 5
+    path                = "/health"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
