@@ -21,3 +21,6 @@ ENV/
 *.tfstate.*
 *.tfplan
 *.bak
+
+# Terraform generated outputs
+outputs-*.json
