@@ -63,3 +63,6 @@ outputs-*.json
 
 # macOS
 .DS_Store
+
+# Maven
+**/target/
