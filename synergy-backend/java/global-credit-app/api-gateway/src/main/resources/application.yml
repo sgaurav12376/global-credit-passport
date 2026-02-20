@@ -2,28 +2,18 @@ server:
   port: 8080
 
 spring:
-  application:
-    name: api-gateway
-
   cloud:
     gateway:
       routes:
-        - id: register-service
-          uri: http://register-service:8081
+        - id: service-template
+          uri: ${SERVICE_TEMPLATE_URL:http://localhost:8081}
           predicates:
-            - Path=/api/register/**
+            - Path=/svc-template/** 
+          filters:
+            - StripPrefix=1
 
-        - id: login-service
-          uri: http://login-service:8082
-          predicates:
-            - Path=/api/login/**
-
-        - id: countrydetails-service
-          uri: http://countrydetails-service:8083
-          predicates:
-            - Path=/api/countries/**
-
-        - id: data-service
-          uri: http://data-service:8085
-          predicates:
-              - Path=/api/data/**,/api/dashboard-data/**
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
