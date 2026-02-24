@@ -14,7 +14,11 @@ export default function Login() {
     try {
       setLoading(true);
       await login(username.trim(), password);
-      nav("/dashboard");
+
+      // 🔥 Route based on purpose
+      const purpose = localStorage.getItem("gcp.purpose");
+      nav(purpose ? "/dashboard" : "/purpose");
+
     } catch (e:any) {
       setErr(e?.message ?? "Login failed");
     } finally {
@@ -28,9 +32,21 @@ export default function Login() {
         <div className="card-header">Log in</div>
         <div className="card-body">
           <div className="label">Email or Phone</div>
-          <input className="input" value={username} onChange={(e)=>setUsername(e.target.value)} placeholder="Email or +E.164 phone" />
+          <input
+            className="input"
+            value={username}
+            onChange={(e)=>setUsername(e.target.value)}
+            placeholder="Email or +E.164 phone"
+          />
+
           <div className="label">Password</div>
-          <input className="input" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="Password" />
+          <input
+            className="input"
+            type="password"
+            value={password}
+            onChange={(e)=>setPassword(e.target.value)}
+            placeholder="Password"
+          />
 
           {err && <div style={{ color: "#b00020", fontSize: 13, marginTop: 10 }}>{err}</div>}
 

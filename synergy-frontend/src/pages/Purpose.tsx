@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 type PurposeKey = "loan" | "bank" | "rent" | "employment";
@@ -8,10 +8,21 @@ export default function Purpose() {
   const [selected, setSelected] = useState<PurposeKey | null>(null);
   const [consent, setConsent] = useState(false);
 
+  // 🔥 If purpose already selected, skip this screen
+  useEffect(() => {
+    const existing = localStorage.getItem("gcp.purpose");
+    if (existing) {
+      nav("/dashboard");
+    }
+  }, [nav]);
+
   function next() {
     if (!selected) return;
     if (!consent) return;
-    sessionStorage.setItem("gcp.purpose", selected);
+
+    // 🔥 Persist purpose
+    localStorage.setItem("gcp.purpose", selected);
+
     nav("/dashboard");
   }
 
@@ -21,21 +32,26 @@ export default function Purpose() {
         <div className="card-header">Choose Your Purpose</div>
         <div className="card-body">
           <Link to="/create-password" className="back">← Back</Link>
-          <div className="hint">What brings you to Global Credit Passport?</div>
+          <div className="hint">
+            What brings you to Global Credit Passport?
+          </div>
 
           <div className="grid2">
             <div className={"tile " + (selected === "loan" ? "selected" : "")} onClick={()=>setSelected("loan")}>
               <div className="icon">🏠</div>
               <div style={{ fontWeight: 700 }}>Apply for a Loan</div>
             </div>
+
             <div className={"tile " + (selected === "bank" ? "selected" : "")} onClick={()=>setSelected("bank")}>
               <div className="icon">🏦</div>
               <div style={{ fontWeight: 700 }}>Open a Bank Account</div>
             </div>
+
             <div className={"tile " + (selected === "rent" ? "selected" : "")} onClick={()=>setSelected("rent")}>
               <div className="icon">🔑</div>
               <div style={{ fontWeight: 700 }}>Rent a Home</div>
             </div>
+
             <div className={"tile " + (selected === "employment" ? "selected" : "")} onClick={()=>setSelected("employment")}>
               <div className="icon">🪪</div>
               <div style={{ fontWeight: 700 }}>Employment Verification</div>
@@ -43,7 +59,11 @@ export default function Purpose() {
           </div>
 
           <label className="checkbox" style={{ marginTop: 14 }}>
-            <input type="checkbox" checked={consent} onChange={(e)=>setConsent(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e)=>setConsent(e.target.checked)}
+            />
             <span>I consent to data access & verification for my selected purpose.</span>
           </label>
 
@@ -52,7 +72,9 @@ export default function Purpose() {
           </button>
 
           <div className="footer">
-            <a className="link" href="#" onClick={(e)=>e.preventDefault()}>Learn More</a>
+            <a className="link" href="#" onClick={(e)=>e.preventDefault()}>
+              Learn More
+            </a>
           </div>
         </div>
       </div>

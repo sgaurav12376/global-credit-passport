@@ -59,8 +59,41 @@ export async function login(username: string, password: string) {
   return signIn({ username, password });
 }
 
+/**
+ * Hard logout:
+ * - Signs out from Cognito (global preferred)
+ * - Clears local app state
+ * - Hard redirects to /login so React state is fully reset
+ */
 export async function logout() {
-  return signOut();
+  try {
+    await signOut({ global: true });
+  } catch (e) {
+    console.warn("Amplify signOut failed:", e);
+  }
+
+  // Clear app state
+  try {
+    localStorage.removeItem("gcp.purpose");
+    localStorage.removeItem("gcp.username");
+    localStorage.removeItem("gcp.idType");
+  } catch {}
+
+  try {
+    sessionStorage.clear();
+  } catch {}
+
+  // Hard redirect resets any cached app state
+  window.location.replace("/login");
+}
+
+export async function isAuthenticated(): Promise<boolean> {
+  try {
+    const session = await fetchAuthSession();
+    return !!session.tokens?.accessToken;
+  } catch {
+    return false;
+  }
 }
 
 export async function getAccessToken(): Promise<string | null> {
