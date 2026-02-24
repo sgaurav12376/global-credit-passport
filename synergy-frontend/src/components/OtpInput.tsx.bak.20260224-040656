@@ -1,0 +1,80 @@
+import React, { useEffect, useMemo, useRef } from "react";
+
+type Props = {
+  length?: number;
+  value: string;                 // digits only string, e.g. "123456"
+  onChange: (val: string) => void;
+  autoFocus?: boolean;
+};
+
+export default function OtpInput({ length = 6, value, onChange, autoFocus }: Props) {
+  const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+  const digits = useMemo(() => {
+    const v = (value ?? "").replace(/\D/g, "").slice(0, length);
+    return Array.from({ length }, (_, i) => v[i] ?? "");
+  }, [value, length]);
+
+  useEffect(() => {
+    if (autoFocus) inputsRef.current[0]?.focus();
+  }, [autoFocus]);
+
+  const setAt = (idx: number, char: string) => {
+    const clean = char.replace(/\D/g, "").slice(0, 1);
+    const next = digits.slice();
+    next[idx] = clean;
+    onChange(next.join(""));
+    if (clean && idx < length - 1) inputsRef.current[idx + 1]?.focus();
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
+    if (!pasted) return;
+    onChange(pasted);
+    const nextIndex = Math.min(pasted.length, length - 1);
+    inputsRef.current[nextIndex]?.focus();
+  };
+
+  const handleKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (digits[idx]) {
+        setAt(idx, "");
+      } else if (idx > 0) {
+        inputsRef.current[idx - 1]?.focus();
+        const next = digits.slice();
+        next[idx - 1] = "";
+        onChange(next.join(""));
+      }
+    }
+    if (e.key === "ArrowLeft" && idx > 0) inputsRef.current[idx - 1]?.focus();
+    if (e.key === "ArrowRight" && idx < length - 1) inputsRef.current[idx + 1]?.focus();
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 10 }} onPaste={handlePaste}>
+      {digits.map((d, idx) => (
+        <input
+          key={idx}
+          ref={(el) => (inputsRef.current[idx] = el)}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          value={d}
+          onChange={(e) => setAt(idx, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(idx, e)}
+          style={{
+            width: 44,
+            height: 52,
+            textAlign: "center",
+            fontSize: 20,
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.2)",
+            background: "rgba(255,255,255,0.06)",
+            color: "white",
+            outline: "none",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
