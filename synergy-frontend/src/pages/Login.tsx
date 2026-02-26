@@ -15,9 +15,15 @@ export default function Login() {
       setLoading(true);
       await login(username.trim(), password);
 
-      // 🔥 Route based on purpose
+      // 🔥 Route based on purpose + passport initialization
       const purpose = localStorage.getItem("gcp.purpose");
-      nav(purpose ? "/dashboard" : "/purpose");
+      const initRaw = localStorage.getItem("gcp.passportInit");
+      const init = initRaw ? JSON.parse(initRaw) : null;
+      const isComplete = init?.status === "complete";
+
+      if (!purpose) nav("/purpose");
+      else if (!isComplete) nav("/passport-init");
+      else nav("/dashboard");
 
     } catch (e:any) {
       setErr(e?.message ?? "Login failed");

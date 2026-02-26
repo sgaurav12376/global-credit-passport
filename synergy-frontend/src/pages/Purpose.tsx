@@ -12,7 +12,7 @@ export default function Purpose() {
   useEffect(() => {
     const existing = localStorage.getItem("gcp.purpose");
     if (existing) {
-      nav("/dashboard");
+      nav("/passport-init");
     }
   }, [nav]);
 
@@ -23,7 +23,7 @@ export default function Purpose() {
     // 🔥 Persist purpose
     localStorage.setItem("gcp.purpose", selected);
 
-    nav("/dashboard");
+    nav("/passport-init");
   }
 
   return (

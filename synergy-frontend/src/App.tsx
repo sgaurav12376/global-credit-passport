@@ -6,6 +6,7 @@ import Purpose from "./pages/Purpose";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import PassportInit from "./pages/PassportInit";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
       <Route path="/verify" element={<Verify />} />
       <Route path="/create-password" element={<CreatePassword />} />
       <Route path="/purpose" element={<Purpose />} />
+      <Route path="/passport-init" element={<PassportInit />} />
       <Route path="/login" element={<Login />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<Dashboard />} />
