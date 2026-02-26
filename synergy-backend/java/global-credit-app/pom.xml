@@ -36,5 +36,6 @@
   <modules>
     <module>api-gateway</module>
     <module>service-template</module>
+    <module>passport-service</module>
   </modules>
 </project>

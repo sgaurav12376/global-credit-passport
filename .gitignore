@@ -66,3 +66,7 @@ outputs-*.json
 
 # Maven
 **/target/
+target/
+**/target/
+**/target/
+docker-compose.gcp.yml
