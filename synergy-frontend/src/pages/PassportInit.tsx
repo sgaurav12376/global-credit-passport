@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
+import { connectSources, generatePassport, initPassport } from "../api/passport";
 
-type PassportInit = {
+type PassportInitState = {
   status: "not_started" | "in_progress" | "complete";
   origin?: string;
   destination?: string;
   fullName?: string;
   dob?: string; // YYYY-MM-DD
+  purpose?: string; // LOAN/BANK/RENT/EMPLOYMENT
+  passportId?: string;
   sources?: {
     creditBureau?: boolean;
     bank?: boolean;
@@ -17,7 +20,7 @@ type PassportInit = {
 
 const LS_KEY = "gcp.passportInit";
 
-function loadInit(): PassportInit {
+function loadInit(): PassportInitState {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return { status: "not_started" };
@@ -27,11 +30,22 @@ function loadInit(): PassportInit {
   }
 }
 
-function saveInit(next: PassportInit) {
+function saveInit(next: PassportInitState) {
   localStorage.setItem(
     LS_KEY,
     JSON.stringify({ ...next, updatedAt: new Date().toISOString() })
   );
+}
+
+function mapPurpose(p: string | null): string {
+  // localStorage stores: loan/bank/rent/employment
+  switch ((p || "").toLowerCase()) {
+    case "loan": return "LOAN";
+    case "bank": return "BANK";
+    case "rent": return "RENT";
+    case "employment": return "EMPLOYMENT";
+    default: return "LOAN";
+  }
 }
 
 export default function PassportInit() {
@@ -76,7 +90,6 @@ export default function PassportInit() {
       setCreditBureau(!!init.sources?.creditBureau);
       setBank(!!init.sources?.bank);
 
-      // Decide which step to land on
       if (!init.origin || !init.destination) setStep(1);
       else if (!init.fullName || !init.dob) setStep(2);
       else if (!init.sources?.creditBureau && !init.sources?.bank) setStep(3);
@@ -85,15 +98,16 @@ export default function PassportInit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function persistInProgress(partial?: Partial<PassportInit>) {
+  function persistInProgress(partial?: Partial<PassportInitState>) {
     const current = loadInit();
-    const next: PassportInit = {
+    const next: PassportInitState = {
       status: "in_progress",
       origin,
       destination,
       fullName,
       dob,
       sources: { creditBureau, bank },
+      purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
       ...current,
       ...partial,
     };
@@ -133,10 +147,38 @@ export default function PassportInit() {
   async function createPassport() {
     setErr(null);
     setLoading(true);
+
     try {
-      // Pilot: mark complete. (Later: call backend API here)
-      const next: PassportInit = {
+      const purpose = mapPurpose(localStorage.getItem("gcp.purpose"));
+
+      // 1) init passport
+      const initRes = await initPassport({
+        purpose,
+        originCountry: origin,
+        destCountry: destination,
+        fullName: fullName.trim(),
+        dob,
+      });
+
+      const passportId = initRes.passportId;
+
+      // 2) connect sources (based on toggles)
+      const sources: string[] = [];
+      if (creditBureau) sources.push("CREDIT_BUREAU");
+      if (bank) sources.push("OPEN_BANKING");
+
+      if (sources.length > 0) {
+        await connectSources(passportId, sources);
+      }
+
+      // 3) generate
+      await generatePassport(passportId);
+
+      // 4) mark complete locally
+      const next: PassportInitState = {
         status: "complete",
+        purpose,
+        passportId,
         origin,
         destination,
         fullName: fullName.trim(),
@@ -144,6 +186,7 @@ export default function PassportInit() {
         sources: { creditBureau, bank },
       };
       saveInit(next);
+
       nav("/dashboard");
     } catch (e: any) {
       setErr(e?.message ?? "Failed to create passport");
@@ -174,7 +217,6 @@ export default function PassportInit() {
             Step {step} of 4
           </div>
 
-          {/* Stepper tiles */}
           <div className="grid2" style={{ marginTop: 10 }}>
             <div className={"tile " + (step === 1 ? "selected" : "")} onClick={() => setStep(1)}>
               <div className="icon">🌍</div>
@@ -196,7 +238,6 @@ export default function PassportInit() {
 
           {err && <div style={{ color: "#b00020", fontSize: 13, marginTop: 12 }}>{err}</div>}
 
-          {/* STEP 1 */}
           {step === 1 && (
             <div style={{ marginTop: 14 }}>
               <div className="hint" style={{ textAlign: "left" }}>
@@ -227,7 +268,6 @@ export default function PassportInit() {
             </div>
           )}
 
-          {/* STEP 2 */}
           {step === 2 && (
             <div style={{ marginTop: 14 }}>
               <div className="hint" style={{ textAlign: "left" }}>
@@ -261,7 +301,6 @@ export default function PassportInit() {
             </div>
           )}
 
-          {/* STEP 3 */}
           {step === 3 && (
             <div style={{ marginTop: 14 }}>
               <div className="hint" style={{ textAlign: "left" }}>
@@ -307,7 +346,6 @@ export default function PassportInit() {
             </div>
           )}
 
-          {/* STEP 4 */}
           {step === 4 && (
             <div style={{ marginTop: 14 }}>
               <div className="hint" style={{ textAlign: "left" }}>

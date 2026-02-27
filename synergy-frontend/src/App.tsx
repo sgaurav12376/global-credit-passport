@@ -3,10 +3,10 @@ import GetStarted from "./pages/GetStarted";
 import Verify from "./pages/Verify";
 import CreatePassword from "./pages/CreatePassword";
 import Purpose from "./pages/Purpose";
+import PassportInit from "./pages/PassportInit";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
-import PassportInit from "./pages/PassportInit";
 
 export default function App() {
   return (

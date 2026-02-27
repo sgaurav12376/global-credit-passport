@@ -1,32 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { logout, getAccessToken } from "../auth/auth";
+import { useNavigate } from "react-router-dom";
 
-type PassportInit = {
-  status: "not_started" | "in_progress" | "complete";
-  origin?: string;
-  destination?: string;
-  fullName?: string;
-  dob?: string;
-  sources?: { creditBureau?: boolean; bank?: boolean };
-  updatedAt?: string;
-};
-
-function loadInit(): PassportInit | null {
-  try {
-    const raw = localStorage.getItem("gcp.passportInit");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+const PASSPORT_LS_KEY = "gcp.passportInit";
 
 export default function Dashboard() {
   const nav = useNavigate();
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string|null>(null);
 
-  const init = useMemo(() => loadInit(), []);
-  const isComplete = init?.status === "complete";
+  const passport = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(PASSPORT_LS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     getAccessToken().then(setToken).catch(() => setToken(null));
@@ -34,66 +23,52 @@ export default function Dashboard() {
 
   return (
     <div className="page-bg">
-      <div className="card" style={{ width: 560 }}>
+      <div className="card" style={{ width: 520 }}>
         <div className="card-header">Dashboard</div>
         <div className="card-body">
           <div style={{ color: "var(--text)", fontWeight: 800, fontSize: 16 }}>
             Welcome to Global Credit Passport
           </div>
 
-          {!isComplete && (
-            <div style={{
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: 12,
-              marginTop: 12,
-              color: "var(--text)"
-            }}>
-              <div style={{ fontWeight: 800 }}>Next step: Initialize your Passport</div>
-              <div className="hint" style={{ textAlign: "left", marginTop: 6 }}>
-                Your account is created, but your Passport isn’t generated yet. Complete setup to unlock score preview.
-              </div>
-              <button className="btn" style={{ marginTop: 12 }} onClick={() => nav("/passport-init")}>
-                Continue setup
-              </button>
-            </div>
-          )}
+          <div className="hint" style={{ textAlign: "left", marginTop: 10 }}>
+            Passport status:
+          </div>
 
-          {isComplete && (
-            <div style={{
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: 12,
-              marginTop: 12,
-              color: "var(--text)"
-            }}>
-              <div style={{ fontWeight: 800 }}>Passport Status: Active ✅</div>
-              <div className="hint" style={{ textAlign: "left", marginTop: 6 }}>
-                Corridor: {init?.origin || "-"} → {init?.destination || "-"} • Sources:{" "}
-                {(init?.sources?.creditBureau ? "Bureau" : "")}
-                {(init?.sources?.creditBureau && init?.sources?.bank ? " + " : "")}
-                {(init?.sources?.bank ? "Bank" : "")}
-              </div>
-            </div>
-          )}
+          <div style={{
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 12,
+            fontSize: 13,
+            color: "var(--text)"
+          }}>
+            <div><b>Status:</b> {passport?.status ?? "not_started"}</div>
+            <div style={{ marginTop: 6 }}><b>Passport ID:</b> {passport?.passportId ?? "-"}</div>
+            <div style={{ marginTop: 6 }}><b>Corridor:</b> {passport?.origin ?? "-"} → {passport?.destination ?? "-"}</div>
+            <div style={{ marginTop: 6 }}><b>Purpose:</b> {passport?.purpose ?? "-"}</div>
+          </div>
 
-          <div className="hint" style={{ textAlign: "left", marginTop: 16 }}>
+          <button
+            className="btn"
+            onClick={() => nav("/passport-init")}
+            style={{ marginTop: 14 }}
+          >
+            {passport?.status === "complete" ? "View / Re-run Passport Init" : "Complete Passport Initialization"}
+          </button>
+
+          <div className="hint" style={{ textAlign: "left", marginTop: 14 }}>
             Your session token (short preview):
           </div>
 
-          <div
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: 12,
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              fontSize: 12,
-              color: "var(--text)",
-              overflow: "auto",
-              maxHeight: 160,
-            }}
-          >
+          <div style={{
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 12,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 12,
+            color: "var(--text)",
+            overflow: "auto",
+            maxHeight: 160
+          }}>
             {token ? token.slice(0, 180) + "..." : "No token yet (log in / sign up)."}
           </div>
 

@@ -3,16 +3,30 @@ import { Link, useNavigate } from "react-router-dom";
 
 type PurposeKey = "loan" | "bank" | "rent" | "employment";
 
+const PASSPORT_LS_KEY = "gcp.passportInit";
+
+function passportIsComplete(): boolean {
+  try {
+    const raw = localStorage.getItem(PASSPORT_LS_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    return obj?.status === "complete";
+  } catch {
+    return false;
+  }
+}
+
 export default function Purpose() {
   const nav = useNavigate();
   const [selected, setSelected] = useState<PurposeKey | null>(null);
   const [consent, setConsent] = useState(false);
 
-  // 🔥 If purpose already selected, skip this screen
+  // If purpose exists, decide whether to go to init or dashboard
   useEffect(() => {
     const existing = localStorage.getItem("gcp.purpose");
     if (existing) {
-      nav("/passport-init");
+      if (passportIsComplete()) nav("/dashboard");
+      else nav("/passport-init");
     }
   }, [nav]);
 
@@ -20,9 +34,7 @@ export default function Purpose() {
     if (!selected) return;
     if (!consent) return;
 
-    // 🔥 Persist purpose
     localStorage.setItem("gcp.purpose", selected);
-
     nav("/passport-init");
   }
 
@@ -32,9 +44,7 @@ export default function Purpose() {
         <div className="card-header">Choose Your Purpose</div>
         <div className="card-body">
           <Link to="/create-password" className="back">← Back</Link>
-          <div className="hint">
-            What brings you to Global Credit Passport?
-          </div>
+          <div className="hint">What brings you to Global Credit Passport?</div>
 
           <div className="grid2">
             <div className={"tile " + (selected === "loan" ? "selected" : "")} onClick={()=>setSelected("loan")}>

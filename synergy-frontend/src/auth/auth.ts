@@ -56,7 +56,19 @@ export async function setPasswordWithCode(username: string, code: string, newPas
 }
 
 export async function login(username: string, password: string) {
-  return signIn({ username, password });
+  try {
+    return await signIn({ username, password });
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+
+    if (msg.toLowerCase().includes("already a signed in user")) {
+      // Clear stale session then retry
+      await logout();              // if you already have logout() in this file
+      return await signIn({ username, password });
+    }
+
+    throw e;
+  }
 }
 
 /**
