@@ -83,7 +83,9 @@ export default function OtpInput({ length = 6, value, onChange, autoFocus, class
       {digits.map((d, idx) => (
         <input
           key={idx}
-          ref={(el) => (refs.current[idx] = el)}
+          ref={(el) => {
+            refs.current[idx] = el;
+          }}
           value={d}
           onChange={(e) => setAt(idx, e.target.value)}
           onKeyDown={(e) => onKeyDown(idx, e)}

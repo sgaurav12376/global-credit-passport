@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
 import { connectSources, generatePassport, initPassport } from "../api/passport";
+import PlaidConnect from "../components/PlaidConnect";
+
+const ENTRUST_WORKFLOW_URL =
+  import.meta.env.VITE_ENTRUST_SMART_CAPTURE_URL;
 
 type PassportInitState = {
   status: "not_started" | "in_progress" | "complete";
@@ -59,6 +63,8 @@ export default function PassportInit() {
   const [dob, setDob] = useState("");
   const [creditBureau, setCreditBureau] = useState(false);
   const [bank, setBank] = useState(false);
+  const [entrustStarted, setEntrustStarted] = useState(false);
+  const [entrustCompleted, setEntrustCompleted] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -101,6 +107,7 @@ export default function PassportInit() {
   function persistInProgress(partial?: Partial<PassportInitState>) {
     const current = loadInit();
     const next: PassportInitState = {
+      ...current,
       status: "in_progress",
       origin,
       destination,
@@ -108,7 +115,6 @@ export default function PassportInit() {
       dob,
       sources: { creditBureau, bank },
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
-      ...current,
       ...partial,
     };
     saveInit(next);
@@ -126,10 +132,19 @@ export default function PassportInit() {
 
   function nextFromStep2() {
     setErr(null);
+
     if (!fullName.trim() || !dob) {
       setErr("Please enter your full name and date of birth.");
       return;
     }
+
+    if (!entrustCompleted) {
+      setErr(
+        "Please complete the Entrust steps and confirm completion."
+      );
+      return;
+    }
+
     persistInProgress({ fullName: fullName.trim(), dob });
     setStep(3);
   }
@@ -142,6 +157,23 @@ export default function PassportInit() {
     }
     persistInProgress({ sources: { creditBureau, bank } });
     setStep(4);
+  }
+
+  function startEntrustVerification() {
+    setErr(null);
+
+    if (!ENTRUST_WORKFLOW_URL) {
+      setErr("Entrust verification URL is not configured.");
+      return;
+    }
+
+    setEntrustStarted(true);
+
+    window.open(
+      ENTRUST_WORKFLOW_URL,
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   async function createPassport() {
@@ -203,6 +235,8 @@ export default function PassportInit() {
     setDob("");
     setCreditBureau(false);
     setBank(false);
+    setEntrustStarted(false);
+    setEntrustCompleted(false);
     setStep(1);
   }
 
@@ -271,7 +305,7 @@ export default function PassportInit() {
           {step === 2 && (
             <div style={{ marginTop: 14 }}>
               <div className="hint" style={{ textAlign: "left" }}>
-                Basic identity profile (pilot KYC-lite). This will later map to full KYC/AML.
+                Enter your basic profile details, then complete secure identity verification through Entrust.
               </div>
 
               <div className="label">Full Name</div>
@@ -289,6 +323,75 @@ export default function PassportInit() {
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
               />
+
+              <div
+                style={{
+                  border: "1px solid var(--border)",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginTop: 16,
+                  color: "var(--text)",
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>
+                  Entrust Identity Verification
+                </div>
+
+                <div
+                  className="hint"
+                  style={{
+                    textAlign: "left",
+                    marginTop: 6,
+                  }}
+                >
+                  Complete document and identity verification securely
+                  through Entrust.
+                </div>
+
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={startEntrustVerification}
+                  style={{ marginTop: 12 }}
+                >
+                  {entrustStarted
+                    ? "Reopen Entrust verification"
+                    : "Verify identity with Entrust"}
+                </button>
+
+                {entrustStarted && !entrustCompleted && (
+                  <div style={{ marginTop: 12 }}>
+                    <div
+                      className="hint"
+                      style={{ textAlign: "left" }}
+                    >
+                      After Entrust displays “Thank you,” close that tab,
+                      return here and confirm that you completed the steps.
+                    </div>
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => setEntrustCompleted(true)}
+                      style={{ marginTop: 10 }}
+                    >
+                      I have completed the Entrust steps
+                    </button>
+                  </div>
+                )}
+
+                {entrustCompleted && (
+                  <div
+                    style={{
+                      color: "#18794e",
+                      fontSize: 13,
+                      marginTop: 12,
+                    }}
+                  >
+                    ✓ Entrust steps completed — result pending confirmation
+                  </div>
+                )}
+              </div>
 
               <button className="btn" onClick={nextFromStep2} style={{ marginTop: 14 }}>
                 Continue
@@ -321,18 +424,22 @@ export default function PassportInit() {
                   <div className="hint" style={{ marginTop: 6 }}>Mock connect</div>
                 </div>
 
-                <div
-                  className={"tile " + (bank ? "selected" : "")}
-                  onClick={() => {
-                    const v = !bank;
-                    setBank(v);
-                    persistInProgress({ sources: { creditBureau, bank: v } });
+                <PlaidConnect
+                  connected={bank}
+                  passportId={init.passportId}
+                  onConnected={() => {
+                    setBank(true);
+                    persistInProgress({
+                      sources: { creditBureau, bank: true },
+                    });
                   }}
-                >
-                  <div className="icon">🏦</div>
-                  <div style={{ fontWeight: 700 }}>Bank / Open Banking</div>
-                  <div className="hint" style={{ marginTop: 6 }}>Mock connect</div>
-                </div>
+                  onAllRemoved={() => {
+                    setBank(false);
+                    persistInProgress({
+                      sources: { creditBureau, bank: false },
+                    });
+                  }}
+                />
               </div>
 
               <button className="btn" onClick={nextFromStep3} style={{ marginTop: 14 }}>

@@ -5,6 +5,7 @@ import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PassportSource;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
+import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
@@ -13,10 +14,16 @@ import java.util.UUID;
 public class PassportService {
   private final PassportRepo passportRepo;
   private final PassportSourceRepo sourceRepo;
+  private final PlaidFinancialSnapshotService plaidSnapshotService;
 
-  public PassportService(PassportRepo passportRepo, PassportSourceRepo sourceRepo) {
+  public PassportService(
+      PassportRepo passportRepo,
+      PassportSourceRepo sourceRepo,
+      PlaidFinancialSnapshotService plaidSnapshotService
+  ) {
     this.passportRepo = passportRepo;
     this.sourceRepo = sourceRepo;
+    this.plaidSnapshotService = plaidSnapshotService;
   }
 
   @Transactional
@@ -53,6 +60,7 @@ public class PassportService {
   public void generate(UUID userId, UUID passportId) {
     Passport p = passportRepo.findByIdAndUserId(passportId, userId)
       .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+    plaidSnapshotService.createIfPlaidConnected(userId, passportId);
     p.setStatus("ACTIVE");
     passportRepo.save(p);
   }

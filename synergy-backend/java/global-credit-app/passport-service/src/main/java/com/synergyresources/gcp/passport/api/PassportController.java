@@ -2,6 +2,7 @@ package com.synergyresources.gcp.passport.api;
 
 import com.synergyresources.gcp.passport.api.Dto;
 import com.synergyresources.gcp.passport.service.PassportService;
+import com.synergyresources.gcp.passport.security.CurrentBorrower;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
@@ -12,9 +13,8 @@ public class PassportController {
   private final PassportService service;
   public PassportController(PassportService service) { this.service = service; }
 
-  // TODO: Replace with real JWT principal extraction from your template security layer
   private UUID currentUserId() {
-    return UUID.fromString("00000000-0000-0000-0000-000000000001");
+    return CurrentBorrower.id();
   }
 
   @PostMapping("/init")

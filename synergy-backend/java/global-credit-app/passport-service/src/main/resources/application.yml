@@ -11,9 +11,21 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+gcp:
+  security:
+    auth-mode: ${GCP_AUTH_MODE:cognito}
+    local-borrower-id: ${GCP_LOCAL_BORROWER_ID:00000000-0000-0000-0000-000000000001}
+    cognito-issuer-uri: ${COGNITO_ISSUER_URI:}
+    cognito-client-id: ${COGNITO_USER_POOL_CLIENT_ID:}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+plaid:
+  base-url: ${PLAID_BASE_URL:https://sandbox.plaid.com}
+  client-id: ${PLAID_CLIENT_ID:}
+  secret: ${PLAID_SECRET:}
+  token-encryption-key: ${PLAID_TOKEN_ENCRYPTION_KEY:}

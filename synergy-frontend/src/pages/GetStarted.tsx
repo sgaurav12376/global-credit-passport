@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { startSignUp } from "/src/auth/auth.ts";
-import type { SignUpIdentifier } from "/src/auth/auth.ts";
+import { startSignUp } from "../auth/auth";
+import type { SignUpIdentifier } from "../auth/auth";
 
 const COUNTRIES = [
   { code: "US", name: "United States", dial: "+1" },

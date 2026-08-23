@@ -70,3 +70,8 @@ target/
 **/target/
 **/target/
 docker-compose.gcp.yml
+
+# Local integration patches and safety copies
+*.patch
+*.backup
+*.before-*

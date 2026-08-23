@@ -1,5 +1,21 @@
+import { getAccessToken } from "../auth/auth";
+
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8087";
+
+async function fetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<Response> {
+  if ((import.meta.env.VITE_AUTH_MODE || "cognito") === "local") {
+    return window.fetch(input, init);
+  }
+  const token = await getAccessToken();
+  if (!token) throw new Error("Your session has expired. Please sign in again.");
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return window.fetch(input, { ...init, headers });
+}
 
 export type PassportInitRequest = {
   purpose: string;        // e.g. "LOAN"
