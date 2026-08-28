@@ -72,6 +72,7 @@ public class PlaidConnection {
   }
 
   public UUID getBorrowerId() { return borrowerId; }
+  public UUID getId() { return id; }
   public void setBorrowerId(UUID borrowerId) { this.borrowerId = borrowerId; }
   public UUID getPassportId() { return passportId; }
   public void setPassportId(UUID passportId) { this.passportId = passportId; }

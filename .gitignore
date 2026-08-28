@@ -77,3 +77,6 @@ docker-compose.gcp.yml
 *.before-*
 
 **/application-local.properties
+
+# Locally stored sensitive credit-report documents
+**/data/surepass-reports/

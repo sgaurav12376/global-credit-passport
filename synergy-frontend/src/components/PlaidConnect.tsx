@@ -6,18 +6,20 @@ import type {
   PlaidLinkOnSuccessMetadata,
 } from "react-plaid-link";
 import {
+  attachPlaidConnection,
   connectPlaidItem,
   createPlaidLinkToken,
   getPlaidConnections,
   getPlaidFinancialSummary,
+  detachPlaidConnection,
   refreshPlaidTransactions,
-  removePlaidConnection,
 } from "../api/plaid";
 import type { PlaidConnectionResult, PlaidFinancialSummary } from "../api/plaid";
 
 type PlaidConnectProps = {
   connected: boolean;
   passportId?: string;
+  ensurePassportId?: () => Promise<string>;
   onConnected: () => void;
   onAllRemoved?: () => void;
 };
@@ -58,10 +60,12 @@ function date(value?: string | null) {
 export default function PlaidConnect({
   connected,
   passportId,
+  ensurePassportId,
   onConnected,
   onAllRemoved,
 }: PlaidConnectProps) {
   const [connections, setConnections] = useState<PlaidConnectionResult[]>([]);
+  const [availableConnections, setAvailableConnections] = useState<PlaidConnectionResult[]>([]);
   const [summary, setSummary] = useState<PlaidFinancialSummary | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [launchWhenReady, setLaunchWhenReady] = useState(false);
@@ -87,24 +91,29 @@ export default function PlaidConnect({
     return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
   }, [connections]);
 
-  const loadConnections = useCallback(async () => {
+  const loadConnections = useCallback(async (resolvedPassportId = passportId) => {
     setLoading(true);
     try {
-      const results = await getPlaidConnections();
-      setConnections(results);
-      if (results.length > 0 && !connected) onConnected();
+      const [results, passportConnections] = await Promise.all([
+        getPlaidConnections(),
+        resolvedPassportId ? getPlaidConnections(resolvedPassportId) : Promise.resolve([]),
+      ]);
+      const attachedIds = new Set(passportConnections.map((item) => item.itemId));
+      setConnections(passportConnections);
+      setAvailableConnections(results.filter((item) => !attachedIds.has(item.itemId)));
+      if (passportConnections.length > 0 && !connected) onConnected();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load Plaid connections.");
     } finally {
       setLoading(false);
     }
-  }, [connected, onConnected]);
+  }, [connected, onConnected, passportId]);
 
   useEffect(() => {
-    void loadConnections();
-    // Load once when the datasource control is mounted.
+    void loadConnections(passportId);
+    // Reload when a new passport version receives its passport ID.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [passportId]);
 
   const onSuccess = useCallback(
     async (publicToken: string | null, _metadata: PlaidLinkOnSuccessMetadata) => {
@@ -112,16 +121,17 @@ export default function PlaidConnect({
       setMessage("Saving the new bank connection...");
       try {
         if (!publicToken) throw new Error("Plaid did not return a public token.");
-        await connectPlaidItem(publicToken, passportId);
+        const resolvedPassportId = passportId || await ensurePassportId?.();
+        await connectPlaidItem(publicToken, resolvedPassportId);
         onConnected();
-        await loadConnections();
+        await loadConnections(resolvedPassportId);
         setSummary(null);
         setMessage("Bank connected successfully.");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Unable to retrieve Plaid data.");
       }
     },
-    [loadConnections, onConnected, passportId]
+    [ensurePassportId, loadConnections, onConnected, passportId]
   );
 
   const onExit = useCallback(
@@ -173,27 +183,47 @@ export default function PlaidConnect({
     }
   }
 
+  async function useExistingConnection(connection: PlaidConnectionResult) {
+    setBusyItemId(connection.itemId);
+    setMessage(`Attaching ${institutionName(connection)}...`);
+    try {
+      const resolvedPassportId = passportId || await ensurePassportId?.();
+      if (!resolvedPassportId) throw new Error("A passport is required before selecting a bank.");
+      await attachPlaidConnection(connection.itemId, resolvedPassportId);
+      await loadConnections(resolvedPassportId);
+      setSummary(null);
+      onConnected();
+      setMessage(`${institutionName(connection)} is now used for this passport.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to use this bank.");
+    } finally {
+      setBusyItemId(null);
+    }
+  }
+
   async function toggleInsights() {
     const next = !showInsights;
     setShowInsights(next);
     if (!next || summary) return;
     try {
-      setSummary(await getPlaidFinancialSummary());
+      setSummary(await getPlaidFinancialSummary(passportId));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load cash-flow insights.");
     }
   }
 
   async function removeConnection(connection: PlaidConnectionResult) {
-    if (!window.confirm(`Remove ${institutionName(connection)} from Global Credit Passport?`)) return;
+    if (!passportId) return;
+    if (!window.confirm(`Stop using ${institutionName(connection)} for this passport?`)) return;
     setBusyItemId(connection.itemId);
     try {
-      await removePlaidConnection(connection.itemId);
+      await detachPlaidConnection(connection.itemId, passportId);
       const remaining = connections.filter((item) => item.itemId !== connection.itemId);
       setConnections(remaining);
       setSummary(null);
       if (remaining.length === 0) onAllRemoved?.();
-      setMessage(`${institutionName(connection)} was removed.`);
+      setAvailableConnections((current) => [connection, ...current]);
+      setMessage(`${institutionName(connection)} was removed from this passport.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to remove bank connection.");
     } finally {
@@ -294,11 +324,35 @@ export default function PlaidConnect({
           )}
         </>
       ) : (
-        <div className="hint" style={{ marginTop: 8 }}>No bank is currently connected.</div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          No bank is selected for this passport version.
+        </div>
+      )}
+
+      {availableConnections.length > 0 && (
+        <div style={{ marginTop: 10, textAlign: "left" }}>
+          <div style={{ fontWeight: 700, fontSize: 12 }}>Existing bank connections</div>
+          <div style={{ maxHeight: 125, overflowY: "auto", display: "grid", gap: 6, marginTop: 6 }}>
+            {availableConnections.map((connection) => (
+              <div key={connection.itemId} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 7 }}>
+                <div style={{ fontWeight: 700, fontSize: 12 }}>{institutionName(connection)}</div>
+                <button
+                  className="btn"
+                  type="button"
+                  style={{ ...compactButtonStyle, marginTop: 5 }}
+                  disabled={busyItemId === connection.itemId}
+                  onClick={() => useExistingConnection(connection)}
+                >
+                  {busyItemId === connection.itemId ? "Attaching..." : "Use for this passport"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <button className="btn" type="button" onClick={startPlaid} disabled={openingPlaid || !!busyItemId} style={{ marginTop: 10 }}>
-        {openingPlaid ? "Opening Plaid..." : connections.length ? "Connect another bank" : "Connect bank"}
+        {openingPlaid ? "Opening Plaid..." : "Connect another bank"}
       </button>
       {message && <div style={{ fontSize: 11, marginTop: 7 }}>{message}</div>}
     </div>

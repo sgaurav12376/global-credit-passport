@@ -126,9 +126,33 @@ export async function getLatestPlaidConnection() {
   return responseJson<PlaidConnectionResult>(response, "Load Plaid connection");
 }
 
-export async function getPlaidConnections() {
-  const response = await fetch(`${API_BASE}/v1/plaid/connections`);
+export async function getPlaidConnections(passportId?: string) {
+  const query = passportId
+    ? `?passportId=${encodeURIComponent(passportId)}`
+    : "";
+  const response = await fetch(`${API_BASE}/v1/plaid/connections${query}`);
   return responseJson<PlaidConnectionResult[]>(response, "Load Plaid connections");
+}
+
+export async function attachPlaidConnection(itemId: string, passportId: string) {
+  const response = await fetch(
+    `${API_BASE}/v1/plaid/connections/${encodeURIComponent(itemId)}/passports/${encodeURIComponent(passportId)}`,
+    { method: "POST" }
+  );
+  return responseJson<PlaidConnectionResult>(response, "Use existing bank");
+}
+
+export async function detachPlaidConnection(itemId: string, passportId: string) {
+  const response = await fetch(
+    `${API_BASE}/v1/plaid/connections/${encodeURIComponent(itemId)}/passports/${encodeURIComponent(passportId)}`,
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(`Remove bank from passport failed (${response.status}): ${
+      body?.message || response.statusText
+    }`);
+  }
 }
 
 export async function refreshPlaidTransactions(itemId: string) {
@@ -153,7 +177,10 @@ export async function removePlaidConnection(itemId: string) {
   }
 }
 
-export async function getPlaidFinancialSummary() {
-  const response = await fetch(`${API_BASE}/v1/plaid/financial-summary`);
+export async function getPlaidFinancialSummary(passportId?: string) {
+  const query = passportId
+    ? `?passportId=${encodeURIComponent(passportId)}`
+    : "";
+  const response = await fetch(`${API_BASE}/v1/plaid/financial-summary${query}`);
   return responseJson<PlaidFinancialSummary>(response, "Load Plaid financial summary");
 }

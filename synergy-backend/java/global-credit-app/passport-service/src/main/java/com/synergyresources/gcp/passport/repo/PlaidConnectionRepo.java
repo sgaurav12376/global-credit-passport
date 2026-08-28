@@ -10,4 +10,10 @@ public interface PlaidConnectionRepo extends JpaRepository<PlaidConnection, UUID
   Optional<PlaidConnection> findByBorrowerIdAndItemId(UUID borrowerId, String itemId);
   Optional<PlaidConnection> findFirstByBorrowerIdOrderByCreatedAtDesc(UUID borrowerId);
   List<PlaidConnection> findAllByBorrowerIdOrderByCreatedAtDesc(UUID borrowerId);
+  List<PlaidConnection> findAllByBorrowerIdAndIdInOrderByCreatedAtDesc(
+      UUID borrowerId, List<UUID> ids
+  );
+  boolean existsByBorrowerIdAndPassportIdAndStatus(
+      UUID borrowerId, UUID passportId, String status
+  );
 }

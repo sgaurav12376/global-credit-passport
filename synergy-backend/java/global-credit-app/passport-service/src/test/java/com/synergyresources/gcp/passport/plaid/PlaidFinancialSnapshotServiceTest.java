@@ -11,9 +11,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PlaidConnection;
 import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
+import com.synergyresources.gcp.passport.model.PassportPlaidConnection;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PlaidConnectionRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
+import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,24 +35,38 @@ class PlaidFinancialSnapshotServiceTest {
     PlaidConnectionRepo connectionRepo = mock(PlaidConnectionRepo.class);
     PassportRepo passportRepo = mock(PassportRepo.class);
     ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    PassportPlaidConnectionRepo associationRepo = mock(PassportPlaidConnectionRepo.class);
     PlaidFinancialSnapshotService service = new PlaidFinancialSnapshotService(
         summaryService,
         snapshotRepo,
         connectionRepo,
         passportRepo,
-        objectMapper
+        objectMapper,
+        associationRepo
     );
 
     Passport passport = mock(Passport.class);
     PlaidConnection first = mock(PlaidConnection.class);
     PlaidConnection second = mock(PlaidConnection.class);
+    PassportPlaidConnection firstAssociation = mock(PassportPlaidConnection.class);
+    PassportPlaidConnection secondAssociation = mock(PassportPlaidConnection.class);
+    UUID firstId = UUID.randomUUID();
+    UUID secondId = UUID.randomUUID();
+    when(firstAssociation.getPlaidConnectionId()).thenReturn(firstId);
+    when(secondAssociation.getPlaidConnectionId()).thenReturn(secondId);
     when(first.getItemId()).thenReturn("item-b");
     when(second.getItemId()).thenReturn("item-a");
     when(passportRepo.findByIdAndUserId(passportId, borrowerId))
         .thenReturn(Optional.of(passport));
-    when(connectionRepo.findAllByBorrowerIdOrderByCreatedAtDesc(borrowerId))
+    when(associationRepo.findAllByBorrowerIdAndPassportIdAndActiveTrue(
+        borrowerId, passportId
+    )).thenReturn(List.of(firstAssociation, secondAssociation));
+    when(connectionRepo.findAllByBorrowerIdAndIdInOrderByCreatedAtDesc(
+        borrowerId, List.of(firstId, secondId)
+    ))
         .thenReturn(List.of(first, second));
-    when(summaryService.getSummary(borrowerId)).thenReturn(summary(borrowerId));
+    when(summaryService.getSummary(borrowerId, List.of("item-b", "item-a")))
+        .thenReturn(summary(borrowerId));
     when(snapshotRepo.saveAndFlush(any(PlaidFinancialSnapshot.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -78,7 +94,8 @@ class PlaidFinancialSnapshotServiceTest {
         mock(PlaidFinancialSnapshotRepo.class),
         mock(PlaidConnectionRepo.class),
         passportRepo,
-        new ObjectMapper().findAndRegisterModules()
+        new ObjectMapper().findAndRegisterModules(),
+        mock(PassportPlaidConnectionRepo.class)
     );
     when(passportRepo.findByIdAndUserId(passportId, borrowerId))
         .thenReturn(Optional.empty());

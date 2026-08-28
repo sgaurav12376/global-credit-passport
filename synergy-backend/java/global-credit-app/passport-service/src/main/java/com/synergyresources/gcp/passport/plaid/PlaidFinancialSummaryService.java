@@ -20,8 +20,16 @@ public class PlaidFinancialSummaryService {
 
   @Transactional(readOnly = true)
   public FinancialSummary getSummary(UUID borrowerId) {
-    Coverage coverage = loadCoverage(borrowerId);
-    List<MonthlyCashflow> monthly = loadMonthly(borrowerId, coverage);
+    return getSummary(borrowerId, null);
+  }
+
+  @Transactional(readOnly = true)
+  public FinancialSummary getSummary(UUID borrowerId, List<String> itemIds) {
+    if (itemIds != null && itemIds.isEmpty()) {
+      throw new IllegalArgumentException("At least one Plaid item is required");
+    }
+    Coverage coverage = loadCoverage(borrowerId, itemIds);
+    List<MonthlyCashflow> monthly = loadMonthly(borrowerId, coverage, itemIds);
     List<MonthlyCashflow> completeMonths = monthly.stream()
         .filter(MonthlyCashflow::completeMonth)
         .toList();
@@ -56,7 +64,9 @@ public class PlaidFinancialSummaryService {
     );
   }
 
-  private Coverage loadCoverage(UUID borrowerId) {
+  private Coverage loadCoverage(UUID borrowerId, List<String> itemIds) {
+    String itemFilter = itemFilter("pt.item_id", itemIds);
+    List<Object> parameters = parameters(borrowerId, itemIds);
     return jdbcTemplate.queryForObject("""
         SELECT
           COUNT(DISTINCT pt.item_id) AS institution_connections,
@@ -72,19 +82,20 @@ public class PlaidFinancialSummaryService {
           AND pt.active
           AND pt.transaction_date IS NOT NULL
           AND pa.account_type = 'depository'
-        """,
+        """ + itemFilter,
         (resultSet, rowNumber) -> new Coverage(
             resultSet.getInt("institution_connections"),
             resultSet.getInt("accounts"),
             resultSet.getInt("transactions"),
             localDate(resultSet.getDate("coverage_start")),
             localDate(resultSet.getDate("coverage_end"))
-        ),
-        borrowerId
+        ), parameters.toArray()
     );
   }
 
-  private List<MonthlyCashflow> loadMonthly(UUID borrowerId, Coverage coverage) {
+  private List<MonthlyCashflow> loadMonthly(
+      UUID borrowerId, Coverage coverage, List<String> itemIds
+  ) {
     LocalDate firstBoundary = coverage.coverageStart() == null
         ? null
         : coverage.coverageStart().withDayOfMonth(1);
@@ -92,19 +103,27 @@ public class PlaidFinancialSummaryService {
         ? null
         : coverage.coverageEnd().withDayOfMonth(1);
 
-    return jdbcTemplate.query("""
+    String source = itemIds == null
+        ? "plaid_monthly_cashflow"
+        : "plaid_monthly_cashflow_by_item";
+    String itemFilter = itemFilter("item_id", itemIds);
+    List<Object> parameters = parameters(borrowerId, itemIds);
+    String sql = """
         SELECT
           month,
-          transaction_count,
-          detected_income,
-          interest_income,
-          refunds_other_credits,
-          total_outflows,
-          debt_payments
-        FROM plaid_monthly_cashflow
+          SUM(transaction_count) AS transaction_count,
+          SUM(detected_income) AS detected_income,
+          SUM(interest_income) AS interest_income,
+          SUM(refunds_other_credits) AS refunds_other_credits,
+          SUM(total_outflows) AS total_outflows,
+          SUM(debt_payments) AS debt_payments
+        FROM %s
         WHERE borrower_id = ?
+        %s
+        GROUP BY month
         ORDER BY month
-        """,
+        """.formatted(source, itemFilter);
+    return jdbcTemplate.query(sql,
         (resultSet, rowNumber) -> {
           LocalDate month = resultSet.getDate("month").toLocalDate();
           BigDecimal income = resultSet.getBigDecimal("detected_income");
@@ -128,9 +147,22 @@ public class PlaidFinancialSummaryService {
               income.add(interest).subtract(outflows),
               income.add(interest).add(refunds).subtract(outflows)
           );
-        },
-        borrowerId
+        }, parameters.toArray()
     );
+  }
+
+  private String itemFilter(String column, List<String> itemIds) {
+    if (itemIds == null) return "";
+    return " AND " + column + " IN (" + String.join(",", java.util.Collections.nCopies(
+        itemIds.size(), "?"
+    )) + ")";
+  }
+
+  private List<Object> parameters(UUID borrowerId, List<String> itemIds) {
+    List<Object> values = new java.util.ArrayList<>();
+    values.add(borrowerId);
+    if (itemIds != null) values.addAll(itemIds);
+    return values;
   }
 
   private BigDecimal average(

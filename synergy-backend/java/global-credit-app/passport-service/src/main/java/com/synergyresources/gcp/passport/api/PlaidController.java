@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
 
 @RestController
@@ -69,13 +70,42 @@ public class PlaidController {
   }
 
   @GetMapping("/connections")
-  public List<PlaidService.ConnectionResult> connections() {
-    return plaidService.connections(currentUserId());
+  public List<PlaidService.ConnectionResult> connections(
+      @RequestParam(required = false) UUID passportId
+  ) {
+    return passportId == null
+        ? plaidService.connections(currentUserId())
+        : plaidService.connections(currentUserId(), passportId);
+  }
+
+  @PostMapping("/connections/{itemId}/passports/{passportId}")
+  public PlaidService.ConnectionResult attachExisting(
+      @PathVariable String itemId,
+      @PathVariable UUID passportId
+  ) {
+    return plaidService.attachExisting(currentUserId(), passportId, itemId);
+  }
+
+  @DeleteMapping("/connections/{itemId}/passports/{passportId}")
+  public ResponseEntity<Void> detach(
+      @PathVariable String itemId,
+      @PathVariable UUID passportId
+  ) {
+    plaidService.detach(currentUserId(), passportId, itemId);
+    return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/financial-summary")
-  public PlaidFinancialSummaryService.FinancialSummary financialSummary() {
-    return financialSummaryService.getSummary(currentUserId());
+  public PlaidFinancialSummaryService.FinancialSummary financialSummary(
+      @RequestParam(required = false) UUID passportId
+  ) {
+    UUID borrowerId = currentUserId();
+    return passportId == null
+        ? financialSummaryService.getSummary(borrowerId)
+        : financialSummaryService.getSummary(
+            borrowerId,
+            plaidService.itemIdsForPassport(borrowerId, passportId)
+        );
   }
 
   @DeleteMapping("/connections/{itemId}")

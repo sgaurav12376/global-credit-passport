@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.synergyresources.gcp.passport.model.PlaidConnection;
+import com.synergyresources.gcp.passport.model.PassportPlaidConnection;
+import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
+import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PlaidConnectionRepo;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.List;
@@ -19,19 +23,26 @@ public class PlaidService {
   private final PlaidTokenCipher tokenCipher;
   private final ObjectMapper objectMapper;
   private final PlaidDataNormalizer dataNormalizer;
+  private final PassportPlaidConnectionRepo passportConnectionRepo;
+  private final PassportRepo passportRepo;
+  private static final String CONSENT_VERSION = "plaid-passport-use-v1";
 
   public PlaidService(
       PlaidClient plaidClient,
       PlaidConnectionRepo connectionRepo,
       PlaidTokenCipher tokenCipher,
       ObjectMapper objectMapper,
-      PlaidDataNormalizer dataNormalizer
+      PlaidDataNormalizer dataNormalizer,
+      PassportPlaidConnectionRepo passportConnectionRepo,
+      PassportRepo passportRepo
   ) {
     this.plaidClient = plaidClient;
     this.connectionRepo = connectionRepo;
     this.tokenCipher = tokenCipher;
     this.objectMapper = objectMapper;
     this.dataNormalizer = dataNormalizer;
+    this.passportConnectionRepo = passportConnectionRepo;
+    this.passportRepo = passportRepo;
   }
 
   public LinkTokenResponse createLinkToken(UUID borrowerId) {
@@ -70,6 +81,9 @@ public class PlaidService {
     connection.setStatus("CONNECTED");
     connectionRepo.save(connection);
     connectionRepo.flush();
+    if (passportId != null) {
+      attach(borrowerId, passportId, connection);
+    }
     dataNormalizer.normalizeAccounts(exchange.itemId(), borrowerId, identity);
     dataNormalizer.reconcileTransactions(
         exchange.itemId(),
@@ -140,6 +154,54 @@ public class PlaidService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<ConnectionResult> connections(UUID borrowerId, UUID passportId) {
+    requireOwnedPassport(borrowerId, passportId);
+    List<UUID> connectionIds = passportConnectionRepo
+        .findAllByBorrowerIdAndPassportIdAndActiveTrue(borrowerId, passportId)
+        .stream()
+        .map(PassportPlaidConnection::getPlaidConnectionId)
+        .toList();
+    if (connectionIds.isEmpty()) return List.of();
+    return connectionRepo
+        .findAllByBorrowerIdAndIdInOrderByCreatedAtDesc(borrowerId, connectionIds)
+        .stream()
+        .map(connection -> toResult(connection, 0, passportId))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<String> itemIdsForPassport(UUID borrowerId, UUID passportId) {
+    return connections(borrowerId, passportId).stream()
+        .map(ConnectionResult::itemId)
+        .toList();
+  }
+
+  @Transactional
+  public ConnectionResult attachExisting(UUID borrowerId, UUID passportId, String itemId) {
+    requireOwnedPassport(borrowerId, passportId);
+    PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
+        .orElseThrow(() -> new IllegalArgumentException("Plaid connection not found"));
+    refreshTransactions(borrowerId, itemId);
+    attach(borrowerId, passportId, connection);
+    return toResult(connection, 0);
+  }
+
+  @Transactional
+  public void detach(UUID borrowerId, UUID passportId, String itemId) {
+    requireOwnedPassport(borrowerId, passportId);
+    PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
+        .orElseThrow(() -> new IllegalArgumentException("Plaid connection not found"));
+    PassportPlaidConnection association = passportConnectionRepo
+        .findByBorrowerIdAndPassportIdAndPlaidConnectionId(
+            borrowerId, passportId, connection.getId()
+        ).orElseThrow(() -> new IllegalArgumentException(
+            "Plaid connection is not attached to this passport"
+        ));
+    association.setActive(false);
+    passportConnectionRepo.save(association);
+  }
+
   @Transactional
   public void removeConnection(UUID borrowerId, String itemId) {
     PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
@@ -153,6 +215,27 @@ public class PlaidService {
     if (existing != null && existing.isArray()) existing.forEach(combined::add);
     if (updates != null && updates.isArray()) updates.forEach(combined::add);
     return combined;
+  }
+
+  private void attach(UUID borrowerId, UUID passportId, PlaidConnection connection) {
+    requireOwnedPassport(borrowerId, passportId);
+    PassportPlaidConnection association = passportConnectionRepo
+        .findByBorrowerIdAndPassportIdAndPlaidConnectionId(
+            borrowerId, passportId, connection.getId()
+        ).orElseGet(PassportPlaidConnection::new);
+    association.setBorrowerId(borrowerId);
+    association.setPassportId(passportId);
+    association.setPlaidConnectionId(connection.getId());
+    association.setConsentVersion(CONSENT_VERSION);
+    association.setConsentedAt(Instant.now());
+    association.setActive(true);
+    passportConnectionRepo.save(association);
+  }
+
+  private void requireOwnedPassport(UUID borrowerId, UUID passportId) {
+    passportRepo.findByIdAndUserId(passportId, borrowerId).orElseThrow(
+        () -> new IllegalArgumentException("Passport not found for the current borrower")
+    );
   }
 
   private DuplicateConnection findDuplicateConnection(UUID borrowerId, JsonNode candidate) {
@@ -199,9 +282,17 @@ public class PlaidService {
   }
 
   private ConnectionResult toResult(PlaidConnection connection, int pages) {
+    return toResult(connection, pages, connection.getPassportId());
+  }
+
+  private ConnectionResult toResult(
+      PlaidConnection connection,
+      int pages,
+      UUID responsePassportId
+  ) {
     return new ConnectionResult(
         connection.getBorrowerId(),
-        connection.getPassportId(),
+        responsePassportId,
         connection.getItemId(),
         connection.getIdentityAccounts(),
         connection.getAddedTransactions(),

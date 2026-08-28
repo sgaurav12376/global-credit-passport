@@ -3,7 +3,7 @@ server:
 
 spring:
   config:
-    import: optional:classpath:application-local.properties
+    import: optional:file:./application-local.properties
   datasource:
     url: jdbc:postgresql://localhost:5432/gcp
     username: gcp
@@ -31,3 +31,10 @@ plaid:
   client-id: ${PLAID_CLIENT_ID:}
   secret: ${PLAID_SECRET:}
   token-encryption-key: ${PLAID_TOKEN_ENCRYPTION_KEY:}
+
+surepass:
+  enabled: ${SUREPASS_ENABLED:false}
+  base-url: ${SUREPASS_BASE_URL:https://sandbox.surepass.app}
+  bearer-token: ${SUREPASS_BEARER_TOKEN:}
+  document-directory: ${SUREPASS_DOCUMENT_DIRECTORY:./data/surepass-reports}
+  max-document-bytes: ${SUREPASS_MAX_DOCUMENT_BYTES:20971520}

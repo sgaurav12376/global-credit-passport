@@ -23,6 +23,22 @@ export type PassportInitRequest = {
   destCountry: string;    // e.g. "US"
   fullName?: string;
   dob?: string; // YYYY-MM-DD
+  supersedesPassportId?: string;
+};
+
+export type PassportView = {
+  passportId: string;
+  status: string;
+  purpose: string;
+  originCountry: string;
+  destCountry: string;
+  fullName?: string | null;
+  dob?: string | null;
+  supersedesPassportId?: string | null;
+  plaidConnected: boolean;
+  creditReportConnected: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 async function ensureOk(res: Response, label: string) {
@@ -55,4 +71,17 @@ export async function generatePassport(passportId: string) {
     method: "POST",
   });
   await ensureOk(res, "generatePassport");
+}
+
+export async function getLatestPassport() {
+  const res = await fetch(`${API_BASE}/v1/passports/latest`);
+  if (res.status === 404) return null;
+  await ensureOk(res, "getLatestPassport");
+  return (await res.json()) as PassportView;
+}
+
+export async function getPassportHistory() {
+  const res = await fetch(`${API_BASE}/v1/passports`);
+  await ensureOk(res, "getPassportHistory");
+  return (await res.json()) as PassportView[];
 }

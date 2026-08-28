@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.synergyresources.gcp.passport.model.PlaidConnection;
+import com.synergyresources.gcp.passport.model.PassportPlaidConnection;
 import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PlaidConnectionRepo;
+import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import java.time.Instant;
 import java.util.List;
@@ -24,19 +26,22 @@ public class PlaidFinancialSnapshotService {
   private final PlaidConnectionRepo connectionRepo;
   private final PassportRepo passportRepo;
   private final ObjectMapper objectMapper;
+  private final PassportPlaidConnectionRepo passportConnectionRepo;
 
   public PlaidFinancialSnapshotService(
       PlaidFinancialSummaryService summaryService,
       PlaidFinancialSnapshotRepo snapshotRepo,
       PlaidConnectionRepo connectionRepo,
       PassportRepo passportRepo,
-      ObjectMapper objectMapper
+      ObjectMapper objectMapper,
+      PassportPlaidConnectionRepo passportConnectionRepo
   ) {
     this.summaryService = summaryService;
     this.snapshotRepo = snapshotRepo;
     this.connectionRepo = connectionRepo;
     this.passportRepo = passportRepo;
     this.objectMapper = objectMapper;
+    this.passportConnectionRepo = passportConnectionRepo;
   }
 
   @Transactional
@@ -44,14 +49,25 @@ public class PlaidFinancialSnapshotService {
     passportRepo.findByIdAndUserId(passportId, borrowerId)
         .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
 
-    List<PlaidConnection> connections =
-        connectionRepo.findAllByBorrowerIdOrderByCreatedAtDesc(borrowerId);
+    List<UUID> connectionIds = passportConnectionRepo
+        .findAllByBorrowerIdAndPassportIdAndActiveTrue(borrowerId, passportId)
+        .stream()
+        .map(PassportPlaidConnection::getPlaidConnectionId)
+        .toList();
+    List<PlaidConnection> connections = connectionIds.isEmpty()
+        ? List.of()
+        : connectionRepo.findAllByBorrowerIdAndIdInOrderByCreatedAtDesc(
+            borrowerId, connectionIds
+        );
     if (connections.isEmpty()) {
-      throw new IllegalArgumentException("No Plaid connection is available for this borrower");
+      throw new IllegalArgumentException("No Plaid connection is attached to this passport");
     }
 
     PlaidFinancialSummaryService.FinancialSummary summary =
-        summaryService.getSummary(borrowerId);
+        summaryService.getSummary(
+            borrowerId,
+            connections.stream().map(PlaidConnection::getItemId).toList()
+        );
     if (summary.analyzedTransactions() == 0) {
       throw new IllegalArgumentException("No eligible Plaid transactions are available to snapshot");
     }
@@ -75,7 +91,9 @@ public class PlaidFinancialSnapshotService {
 
   @Transactional
   public Optional<SnapshotResult> createIfPlaidConnected(UUID borrowerId, UUID passportId) {
-    if (connectionRepo.findAllByBorrowerIdOrderByCreatedAtDesc(borrowerId).isEmpty()) {
+    if (!passportConnectionRepo.existsByBorrowerIdAndPassportIdAndActiveTrue(
+        borrowerId, passportId
+    )) {
       return Optional.empty();
     }
     return Optional.of(create(borrowerId, passportId));

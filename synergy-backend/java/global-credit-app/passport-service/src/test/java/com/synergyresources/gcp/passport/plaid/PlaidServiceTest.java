@@ -25,7 +25,15 @@ class PlaidServiceTest {
     PlaidConnectionRepo repo = mock(PlaidConnectionRepo.class);
     PlaidTokenCipher cipher = mock(PlaidTokenCipher.class);
     PlaidDataNormalizer normalizer = mock(PlaidDataNormalizer.class);
-    PlaidService service = new PlaidService(client, repo, cipher, objectMapper, normalizer);
+    PlaidService service = new PlaidService(
+        client,
+        repo,
+        cipher,
+        objectMapper,
+        normalizer,
+        mock(com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo.class),
+        mock(com.synergyresources.gcp.passport.repo.PassportRepo.class)
+    );
 
     JsonNode identity = identity("ins_1", "Test Bank", "0000", "checking");
     PlaidConnection existing = new PlaidConnection();

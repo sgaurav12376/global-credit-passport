@@ -17,6 +17,7 @@ public class Passport {
 
   @Column(name="full_name") private String fullName;
   @Column(name="dob") private LocalDate dob;
+  @Column(name="supersedes_passport_id") private UUID supersedesPassportId;
 
   @Column(nullable=false) private String status;
 
@@ -45,6 +46,10 @@ public class Passport {
   public void setFullName(String fullName) { this.fullName = fullName; }
   public LocalDate getDob() { return dob; }
   public void setDob(LocalDate dob) { this.dob = dob; }
+  public UUID getSupersedesPassportId() { return supersedesPassportId; }
+  public void setSupersedesPassportId(UUID value) { supersedesPassportId = value; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
+  public Instant getCreatedAt() { return createdAt; }
+  public Instant getUpdatedAt() { return updatedAt; }
 }

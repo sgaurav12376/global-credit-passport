@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
 import { connectSources, generatePassport, initPassport } from "../api/passport";
 import PlaidConnect from "../components/PlaidConnect";
+import SurepassCreditConnect from "../components/SurepassCreditConnect";
 
 const ENTRUST_WORKFLOW_URL =
   import.meta.env.VITE_ENTRUST_SMART_CAPTURE_URL;
@@ -15,6 +16,8 @@ type PassportInitState = {
   dob?: string; // YYYY-MM-DD
   purpose?: string; // LOAN/BANK/RENT/EMPLOYMENT
   passportId?: string;
+  supersedesPassportId?: string;
+  startStep?: 1 | 2 | 3 | 4;
   sources?: {
     creditBureau?: boolean;
     bank?: boolean;
@@ -63,6 +66,9 @@ export default function PassportInit() {
   const [dob, setDob] = useState("");
   const [creditBureau, setCreditBureau] = useState(false);
   const [bank, setBank] = useState(false);
+  const [passportId, setPassportId] = useState<string | undefined>(
+    () => loadInit().passportId
+  );
   const [entrustStarted, setEntrustStarted] = useState(false);
   const [entrustCompleted, setEntrustCompleted] = useState(false);
 
@@ -95,6 +101,12 @@ export default function PassportInit() {
       setDob(init.dob ?? "");
       setCreditBureau(!!init.sources?.creditBureau);
       setBank(!!init.sources?.bank);
+      setPassportId(init.passportId);
+
+      if (init.startStep) {
+        setStep(init.startStep);
+        return;
+      }
 
       if (!init.origin || !init.destination) setStep(1);
       else if (!init.fullName || !init.dob) setStep(2);
@@ -114,7 +126,9 @@ export default function PassportInit() {
       fullName,
       dob,
       sources: { creditBureau, bank },
+      passportId: passportId ?? current.passportId,
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
+      startStep: undefined,
       ...partial,
     };
     saveInit(next);
@@ -130,7 +144,7 @@ export default function PassportInit() {
     setStep(2);
   }
 
-  function nextFromStep2() {
+  async function nextFromStep2() {
     setErr(null);
 
     if (!fullName.trim() || !dob) {
@@ -145,8 +159,23 @@ export default function PassportInit() {
       return;
     }
 
-    persistInProgress({ fullName: fullName.trim(), dob });
-    setStep(3);
+    setLoading(true);
+    try {
+      persistInProgress({ fullName: fullName.trim(), dob });
+
+      // Create and persist the new passport version before data sources mount.
+      await ensurePassportId();
+
+      setStep(3);
+    } catch (error) {
+      setErr(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the updated passport draft."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   function nextFromStep3() {
@@ -183,16 +212,8 @@ export default function PassportInit() {
     try {
       const purpose = mapPurpose(localStorage.getItem("gcp.purpose"));
 
-      // 1) init passport
-      const initRes = await initPassport({
-        purpose,
-        originCountry: origin,
-        destCountry: destination,
-        fullName: fullName.trim(),
-        dob,
-      });
-
-      const passportId = initRes.passportId;
+      // 1) reuse the draft created for provider connections, or create it now
+      const resolvedPassportId = await ensurePassportId();
 
       // 2) connect sources (based on toggles)
       const sources: string[] = [];
@@ -200,22 +221,23 @@ export default function PassportInit() {
       if (bank) sources.push("OPEN_BANKING");
 
       if (sources.length > 0) {
-        await connectSources(passportId, sources);
+        await connectSources(resolvedPassportId, sources);
       }
 
       // 3) generate
-      await generatePassport(passportId);
+      await generatePassport(resolvedPassportId);
 
       // 4) mark complete locally
       const next: PassportInitState = {
         status: "complete",
         purpose,
-        passportId,
+        passportId: resolvedPassportId,
         origin,
         destination,
         fullName: fullName.trim(),
         dob,
         sources: { creditBureau, bank },
+        supersedesPassportId: init.supersedesPassportId,
       };
       saveInit(next);
 
@@ -227,6 +249,24 @@ export default function PassportInit() {
     }
   }
 
+  async function ensurePassportId(): Promise<string> {
+    if (passportId) return passportId;
+    if (!origin || !destination || !fullName.trim() || !dob) {
+      throw new Error("Complete corridor and profile details before connecting a data source.");
+    }
+    const result = await initPassport({
+      purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
+      originCountry: origin,
+      destCountry: destination,
+      fullName: fullName.trim(),
+      dob,
+      supersedesPassportId: init.supersedesPassportId,
+    });
+    setPassportId(result.passportId);
+    persistInProgress({ passportId: result.passportId });
+    return result.passportId;
+  }
+
   function reset() {
     localStorage.removeItem(LS_KEY);
     setOrigin("");
@@ -235,6 +275,7 @@ export default function PassportInit() {
     setDob("");
     setCreditBureau(false);
     setBank(false);
+    setPassportId(undefined);
     setEntrustStarted(false);
     setEntrustCompleted(false);
     setStep(1);
@@ -393,8 +434,13 @@ export default function PassportInit() {
                 )}
               </div>
 
-              <button className="btn" onClick={nextFromStep2} style={{ marginTop: 14 }}>
-                Continue
+              <button
+                className="btn"
+                onClick={nextFromStep2}
+                disabled={loading}
+                style={{ marginTop: 14 }}
+              >
+                {loading ? "Preparing data sources..." : "Continue"}
               </button>
               <div className="footer">
                 <a className="link" href="#" onClick={(e) => { e.preventDefault(); persistInProgress(); }}>
@@ -411,22 +457,23 @@ export default function PassportInit() {
               </div>
 
               <div className="grid2">
-                <div
-                  className={"tile " + (creditBureau ? "selected" : "")}
-                  onClick={() => {
-                    const v = !creditBureau;
-                    setCreditBureau(v);
-                    persistInProgress({ sources: { creditBureau: v, bank } });
+                <SurepassCreditConnect
+                  connected={creditBureau}
+                  passportId={passportId}
+                  fullName={fullName}
+                  ensurePassportId={ensurePassportId}
+                  onConnected={() => {
+                    setCreditBureau(true);
+                    persistInProgress({
+                      sources: { creditBureau: true, bank },
+                    });
                   }}
-                >
-                  <div className="icon">📊</div>
-                  <div style={{ fontWeight: 700 }}>Credit Bureau</div>
-                  <div className="hint" style={{ marginTop: 6 }}>Mock connect</div>
-                </div>
+                />
 
                 <PlaidConnect
                   connected={bank}
-                  passportId={init.passportId}
+                  passportId={passportId}
+                  ensurePassportId={ensurePassportId}
                   onConnected={() => {
                     setBank(true);
                     persistInProgress({
