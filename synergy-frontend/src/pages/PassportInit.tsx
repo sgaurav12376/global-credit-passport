@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
-import { connectSources, generatePassport, initPassport } from "../api/passport";
+import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePassportUpdateDraft, initPassport, recordEntrustSubmission, updatePassportDraft } from "../api/passport";
 import PlaidConnect from "../components/PlaidConnect";
 import SurepassCreditConnect from "../components/SurepassCreditConnect";
 
@@ -18,6 +18,9 @@ type PassportInitState = {
   passportId?: string;
   supersedesPassportId?: string;
   startStep?: 1 | 2 | 3 | 4;
+  mode?: "view" | "edit";
+  identityStatus?: string | null;
+  identityCompletedAt?: string | null;
   sources?: {
     creditBureau?: boolean;
     bank?: boolean;
@@ -71,11 +74,18 @@ export default function PassportInit() {
   );
   const [entrustStarted, setEntrustStarted] = useState(false);
   const [entrustCompleted, setEntrustCompleted] = useState(false);
+  const [mode, setMode] = useState<"view" | "edit">(() => loadInit().mode || "edit");
+  const [supersedesPassportId, setSupersedesPassportId] = useState<string | undefined>(
+    () => loadInit().supersedesPassportId
+  );
+  const [showUpdateChooser, setShowUpdateChooser] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const init = useMemo(() => loadInit(), []);
+  const readOnly = mode === "view";
 
   // Guard: require logged-in session
   useEffect(() => {
@@ -102,6 +112,10 @@ export default function PassportInit() {
       setCreditBureau(!!init.sources?.creditBureau);
       setBank(!!init.sources?.bank);
       setPassportId(init.passportId);
+      setSupersedesPassportId(init.supersedesPassportId);
+      setEntrustCompleted(
+        init.identityStatus === "ENTRUST_SUBMITTED" || init.identityStatus === "PILOT_COMPLETED"
+      );
 
       if (init.startStep) {
         setStep(init.startStep);
@@ -134,14 +148,65 @@ export default function PassportInit() {
     saveInit(next);
   }
 
-  function nextFromStep1() {
+  async function saveDetails(resolvedPassportId: string, currentSection?: string) {
+    const saved = await updatePassportDraft(resolvedPassportId, {
+      purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
+      originCountry: origin,
+      destCountry: destination,
+      fullName: fullName.trim(),
+      dob,
+      currentSection,
+    });
+    persistInProgress({
+      origin: saved.originCountry,
+      destination: saved.destCountry,
+      fullName: saved.fullName || "",
+      dob: saved.dob || "",
+      identityStatus: saved.identityStatus,
+      identityCompletedAt: saved.identityCompletedAt,
+    });
+    setEntrustCompleted(
+      saved.identityStatus === "ENTRUST_SUBMITTED" || saved.identityStatus === "PILOT_COMPLETED"
+    );
+    setSaveMessage("Saved to your passport");
+    return saved;
+  }
+
+  async function saveProgress() {
+    persistInProgress();
+    if (!origin || !destination || !fullName.trim() || !dob) {
+      setSaveMessage("Progress saved on this device");
+      return;
+    }
+    setLoading(true);
     setErr(null);
+    try {
+      const resolvedPassportId = await ensurePassportId();
+      await saveDetails(resolvedPassportId);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to save your changes.");
+    } finally { setLoading(false); }
+  }
+
+  async function nextFromStep1() {
+    setErr(null);
+    setSaveMessage(null);
     if (!origin || !destination) {
       setErr("Please select both origin and destination.");
       return;
     }
-    persistInProgress({ origin, destination });
-    setStep(2);
+    persistInProgress({ origin, destination, startStep: 2 });
+    if (!passportId) {
+      setStep(2);
+      return;
+    }
+    setLoading(true);
+    try {
+      await saveDetails(passportId, "IDENTITY");
+      setStep(2);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to save your changes.");
+    } finally { setLoading(false); }
   }
 
   async function nextFromStep2() {
@@ -152,19 +217,13 @@ export default function PassportInit() {
       return;
     }
 
-    if (!entrustCompleted) {
-      setErr(
-        "Please complete the Entrust steps and confirm completion."
-      );
-      return;
-    }
-
     setLoading(true);
     try {
       persistInProgress({ fullName: fullName.trim(), dob });
 
       // Create and persist the new passport version before data sources mount.
-      await ensurePassportId();
+      const resolvedPassportId = await ensurePassportId();
+      await saveDetails(resolvedPassportId, "FINANCIAL");
 
       setStep(3);
     } catch (error) {
@@ -178,14 +237,21 @@ export default function PassportInit() {
     }
   }
 
-  function nextFromStep3() {
+  async function nextFromStep3() {
     setErr(null);
     if (!creditBureau && !bank) {
       setErr("Connect at least one data source to continue (pilot requirement).");
       return;
     }
-    persistInProgress({ sources: { creditBureau, bank } });
-    setStep(4);
+    setLoading(true);
+    try {
+      const resolvedPassportId = await ensurePassportId();
+      await saveDetails(resolvedPassportId, "REVIEW");
+      persistInProgress({ sources: { creditBureau, bank }, startStep: 4 });
+      setStep(4);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to save your changes.");
+    } finally { setLoading(false); }
   }
 
   function startEntrustVerification() {
@@ -205,6 +271,24 @@ export default function PassportInit() {
     );
   }
 
+  async function confirmEntrustCompletion() {
+    setLoading(true);
+    setErr(null);
+    try {
+      const resolvedPassportId = await ensurePassportId();
+      await saveDetails(resolvedPassportId);
+      const result = await recordEntrustSubmission(resolvedPassportId);
+      setEntrustCompleted(true);
+      persistInProgress({
+        identityStatus: result.identityStatus,
+        identityCompletedAt: result.completedAt,
+      });
+      setSaveMessage("Identity submission saved");
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to save identity completion.");
+    } finally { setLoading(false); }
+  }
+
   async function createPassport() {
     setErr(null);
     setLoading(true);
@@ -214,6 +298,14 @@ export default function PassportInit() {
 
       // 1) reuse the draft created for provider connections, or create it now
       const resolvedPassportId = await ensurePassportId();
+      const savedPassport = await saveDetails(resolvedPassportId);
+      if (
+        savedPassport.identityStatus !== "ENTRUST_SUBMITTED" &&
+        savedPassport.identityStatus !== "PILOT_COMPLETED"
+      ) {
+        setStep(2);
+        throw new Error("Complete identity verification before publishing this passport.");
+      }
 
       // 2) connect sources (based on toggles)
       const sources: string[] = [];
@@ -267,6 +359,59 @@ export default function PassportInit() {
     return result.passportId;
   }
 
+  async function beginUpdate(targetStep: 1 | 2 | 3 = 1) {
+    if (!passportId) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      const result = await getOrCreatePassportUpdateDraft(passportId);
+      const section = targetStep === 1 ? "PURPOSE" : targetStep === 2 ? "IDENTITY" : "FINANCIAL";
+      await updatePassportDraft(result.passportId, {
+        purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
+        originCountry: origin,
+        destCountry: destination,
+        fullName: fullName.trim(),
+        dob,
+        currentSection: section,
+      });
+      const next = { ...loadInit(), mode: "edit" as const, status: "in_progress" as const,
+        passportId: result.passportId, supersedesPassportId: passportId, startStep: targetStep };
+      saveInit(next);
+      setPassportId(result.passportId);
+      setSupersedesPassportId(passportId);
+      setMode("edit");
+      setStep(targetStep);
+      setShowUpdateChooser(false);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to open an update draft.");
+    } finally { setLoading(false); }
+  }
+
+  async function discardUpdate() {
+    if (!passportId || !supersedesPassportId) return;
+    if (!window.confirm("Discard this unfinished update? Your current published passport will not change.")) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      await cancelPassportUpdate(passportId);
+      localStorage.removeItem(LS_KEY);
+      nav("/dashboard");
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to discard this update.");
+    } finally { setLoading(false); }
+  }
+
+  function navigateToStep(targetStep: 1 | 2 | 3 | 4) {
+    setStep(targetStep);
+    if (readOnly) return;
+    persistInProgress({ startStep: targetStep });
+    if (passportId) {
+      const section = targetStep === 1 ? "PURPOSE" : targetStep === 2 ? "IDENTITY" : targetStep === 3 ? "FINANCIAL" : "REVIEW";
+      void saveDetails(passportId, section).catch((error) =>
+        setErr(error instanceof Error ? error.message : "Unable to save your position."));
+    }
+  }
+
   function reset() {
     localStorage.removeItem(LS_KEY);
     setOrigin("");
@@ -276,51 +421,65 @@ export default function PassportInit() {
     setCreditBureau(false);
     setBank(false);
     setPassportId(undefined);
+    setSupersedesPassportId(undefined);
     setEntrustStarted(false);
     setEntrustCompleted(false);
     setStep(1);
   }
 
   return (
-    <div className="page-bg">
-      <div className="card" style={{ width: 560 }}>
-        <div className="card-header">Passport Initialization</div>
+    <div className="page-bg workspace-bg">
+      <div className="card passport-workspace-card">
+        <div className="card-header workspace-card-header">
+          <div><span className="eyebrow">GLOBAL CREDIT PASSPORT</span><h2>{readOnly ? "Your passport" : supersedesPassportId ? "Update your passport" : "Build your passport"}</h2></div>
+          <Link to="/dashboard" className="btn btn-secondary compact-action">Dashboard</Link>
+        </div>
         <div className="card-body">
-          <Link to="/purpose" className="back">← Back</Link>
+          {readOnly && <div className="view-mode-banner"><span><b>Published passport</b> — review your information or start an update.</span><button className="btn compact-action" disabled={loading} onClick={() => setShowUpdateChooser(true)}>Update information</button></div>}
 
-          <div className="hint" style={{ textAlign: "left" }}>
-            Step {step} of 4
-          </div>
+          {showUpdateChooser && <section className="update-chooser" aria-label="Choose information to update">
+            <div><h3>What would you like to update?</h3><p>Choose one section. You can review everything before publishing.</p></div>
+            <div className="update-choice-list">
+              <button onClick={() => void beginUpdate(1)}><b>Purpose and countries</b><span>Where your history comes from and where you will use it</span></button>
+              <button onClick={() => void beginUpdate(2)}><b>Personal details</b><span>Name, date of birth, and identity verification</span></button>
+              <button onClick={() => void beginUpdate(3)}><b>Financial information</b><span>Credit reports and connected bank accounts</span></button>
+            </div>
+            <button className="text-button centered" onClick={() => setShowUpdateChooser(false)}>Cancel</button>
+          </section>}
 
-          <div className="grid2" style={{ marginTop: 10 }}>
-            <div className={"tile " + (step === 1 ? "selected" : "")} onClick={() => setStep(1)}>
-              <div className="icon">🌍</div>
-              <div style={{ fontWeight: 700 }}>Corridor</div>
+          <div className="journey-intro"><b>{readOnly ? "Passport information" : "A few steps bring your verified information together."}</b><span>{readOnly ? "Choose a section to review." : `Step ${step} of 4`}</span></div>
+
+          <div className="workspace-stepper" style={{ marginTop: 10 }}>
+            <div className={"tile " + (step === 1 ? "selected" : "")} onClick={() => navigateToStep(1)}>
+              <div className="step-number">1</div>
+              <div><b>Purpose</b><small>Where you will use it</small></div>
             </div>
-            <div className={"tile " + (step === 2 ? "selected" : "")} onClick={() => setStep(2)}>
-              <div className="icon">🧾</div>
-              <div style={{ fontWeight: 700 }}>Profile</div>
+            <div className={"tile " + (step === 2 ? "selected" : "")} onClick={() => navigateToStep(2)}>
+              <div className="step-number">2</div>
+              <div><b>Identity</b><small>Your verified details</small></div>
             </div>
-            <div className={"tile " + (step === 3 ? "selected" : "")} onClick={() => setStep(3)}>
-              <div className="icon">🔗</div>
-              <div style={{ fontWeight: 700 }}>Data Sources</div>
+            <div className={"tile " + (step === 3 ? "selected" : "")} onClick={() => navigateToStep(3)}>
+              <div className="step-number">3</div>
+              <div><b>Financial information</b><small>Credit and banking</small></div>
             </div>
-            <div className={"tile " + (step === 4 ? "selected" : "")} onClick={() => setStep(4)}>
-              <div className="icon">🪪</div>
-              <div style={{ fontWeight: 700 }}>Generate</div>
+            <div className={"tile " + (step === 4 ? "selected" : "")} onClick={() => navigateToStep(4)}>
+              <div className="step-number">4</div>
+              <div><b>Review</b><small>Check and finish</small></div>
             </div>
           </div>
 
           {err && <div style={{ color: "#b00020", fontSize: 13, marginTop: 12 }}>{err}</div>}
+          {saveMessage && !err && <div className="save-confirmation">✓ {saveMessage}</div>}
 
           {step === 1 && (
             <div style={{ marginTop: 14 }}>
+              <h3 className="task-title">Where will you use your financial history?</h3>
               <div className="hint" style={{ textAlign: "left" }}>
-                Choose your origin and destination country for this passport.
+                Tell us where your history comes from and where you plan to use it.
               </div>
 
               <div className="label">Origin Country</div>
-              <select className="input" value={origin} onChange={(e) => setOrigin(e.target.value)}>
+              <select className="input" disabled={readOnly} value={origin} onChange={(e) => setOrigin(e.target.value)}>
                 <option value="">Select</option>
                 <option value="IN">India</option>
                 <option value="US">United States</option>
@@ -329,7 +488,7 @@ export default function PassportInit() {
               </select>
 
               <div className="label">Destination Country</div>
-              <select className="input" value={destination} onChange={(e) => setDestination(e.target.value)}>
+              <select className="input" disabled={readOnly} value={destination} onChange={(e) => setDestination(e.target.value)}>
                 <option value="">Select</option>
                 <option value="US">United States</option>
                 <option value="SG">Singapore</option>
@@ -337,14 +496,15 @@ export default function PassportInit() {
                 <option value="AE">UAE</option>
               </select>
 
-              <button className="btn" onClick={nextFromStep1} style={{ marginTop: 14 }}>
-                Continue
+              <button className="btn" disabled={loading} onClick={() => readOnly ? setStep(2) : void nextFromStep1()} style={{ marginTop: 14 }}>
+                {readOnly ? "Next section" : "Continue"}
               </button>
             </div>
           )}
 
           {step === 2 && (
             <div style={{ marginTop: 14 }}>
+              <h3 className="task-title">Verify that this information belongs to you</h3>
               <div className="hint" style={{ textAlign: "left" }}>
                 Enter your basic profile details, then complete secure identity verification through Entrust.
               </div>
@@ -352,6 +512,7 @@ export default function PassportInit() {
               <div className="label">Full Name</div>
               <input
                 className="input"
+                disabled={readOnly}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Your legal name"
@@ -360,6 +521,7 @@ export default function PassportInit() {
               <div className="label">Date of Birth</div>
               <input
                 className="input"
+                disabled={readOnly}
                 type="date"
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
@@ -375,7 +537,7 @@ export default function PassportInit() {
                 }}
               >
                 <div style={{ fontWeight: 700 }}>
-                  Entrust Identity Verification
+                  Identity verification
                 </div>
 
                 <div
@@ -385,20 +547,20 @@ export default function PassportInit() {
                     marginTop: 6,
                   }}
                 >
-                  Complete document and identity verification securely
-                  through Entrust.
+                  Complete a secure identity check. Entrust performs the verification for GCP.
                 </div>
 
-                <button
+                {!entrustCompleted && <button
                   className="btn"
                   type="button"
+                  disabled={readOnly}
                   onClick={startEntrustVerification}
                   style={{ marginTop: 12 }}
                 >
                   {entrustStarted
                     ? "Reopen Entrust verification"
                     : "Verify identity with Entrust"}
-                </button>
+                </button>}
 
                 {entrustStarted && !entrustCompleted && (
                   <div style={{ marginTop: 12 }}>
@@ -413,10 +575,11 @@ export default function PassportInit() {
                     <button
                       className="btn"
                       type="button"
-                      onClick={() => setEntrustCompleted(true)}
+                      disabled={loading}
+                      onClick={() => void confirmEntrustCompletion()}
                       style={{ marginTop: 10 }}
                     >
-                      I have completed the Entrust steps
+                      {loading ? "Saving..." : "I have completed the Entrust steps"}
                     </button>
                   </div>
                 )}
@@ -429,35 +592,37 @@ export default function PassportInit() {
                       marginTop: 12,
                     }}
                   >
-                    ✓ Entrust steps completed — result pending confirmation
+                    ✓ Entrust submission recorded — provider confirmation pending
                   </div>
                 )}
               </div>
 
               <button
                 className="btn"
-                onClick={nextFromStep2}
+                onClick={() => readOnly ? setStep(3) : void nextFromStep2()}
                 disabled={loading}
                 style={{ marginTop: 14 }}
               >
-                {loading ? "Preparing data sources..." : "Continue"}
+                {loading ? "Preparing data sources..." : readOnly ? "Next section" : "Continue"}
               </button>
-              <div className="footer">
-                <a className="link" href="#" onClick={(e) => { e.preventDefault(); persistInProgress(); }}>
+              {!readOnly && <div className="footer">
+                <a className="link" href="#" onClick={(e) => { e.preventDefault(); void saveProgress(); }}>
                   Save progress
                 </a>
-              </div>
+              </div>}
             </div>
           )}
 
           {step === 3 && (
             <div style={{ marginTop: 14 }}>
+              <h3 className="task-title">Add financial information</h3>
               <div className="hint" style={{ textAlign: "left" }}>
-                Connect at least one source to generate a Passport preview (pilot).
+                Add at least one source. More verified information can make your passport more useful.
               </div>
 
-              <div className="grid2">
+              <div className="data-source-grid">
                 <SurepassCreditConnect
+                  readOnly={readOnly}
                   connected={creditBureau}
                   passportId={passportId}
                   fullName={fullName}
@@ -471,6 +636,7 @@ export default function PassportInit() {
                 />
 
                 <PlaidConnect
+                  readOnly={readOnly}
                   connected={bank}
                   passportId={passportId}
                   ensurePassportId={ensurePassportId}
@@ -489,21 +655,22 @@ export default function PassportInit() {
                 />
               </div>
 
-              <button className="btn" onClick={nextFromStep3} style={{ marginTop: 14 }}>
-                Continue
+              <button className="btn" disabled={loading} onClick={() => readOnly ? setStep(4) : void nextFromStep3()} style={{ marginTop: 14 }}>
+                {readOnly ? "Next section" : "Continue"}
               </button>
-              <div className="footer">
+              {!readOnly && <div className="footer">
                 <a className="link" href="#" onClick={(e) => { e.preventDefault(); reset(); }}>
                   Reset setup
                 </a>
-              </div>
+              </div>}
             </div>
           )}
 
           {step === 4 && (
             <div style={{ marginTop: 14 }}>
+              <h3 className="task-title">Review your passport</h3>
               <div className="hint" style={{ textAlign: "left" }}>
-                Review and generate your Passport.
+                Confirm that the information below is ready to use.
               </div>
 
               <div style={{
@@ -517,7 +684,7 @@ export default function PassportInit() {
                 <div style={{ marginTop: 6 }}><b>Name:</b> {fullName || "-"}</div>
                 <div style={{ marginTop: 6 }}><b>DOB:</b> {dob || "-"}</div>
                 <div style={{ marginTop: 6 }}>
-                  <b>Sources:</b>{" "}
+                  <b>Financial information:</b>{" "}
                   {(creditBureau ? "Credit Bureau" : "")}
                   {(creditBureau && bank ? ", " : "")}
                   {(bank ? "Bank/Open Banking" : "")}
@@ -525,17 +692,21 @@ export default function PassportInit() {
                 </div>
               </div>
 
-              <button className="btn" onClick={createPassport} disabled={loading} style={{ marginTop: 14 }}>
-                {loading ? "Creating..." : "Create Passport"}
-              </button>
+              {readOnly ? <button className="btn" onClick={() => nav("/dashboard")} style={{ marginTop: 14 }}>Back to dashboard</button> :
+                <button className="btn" onClick={createPassport} disabled={loading} style={{ marginTop: 14 }}>{loading ? "Creating..." : "Publish updated passport"}</button>}
 
-              <div className="footer">
-                <a className="link" href="#" onClick={(e) => { e.preventDefault(); persistInProgress(); }}>
+              {!readOnly && <div className="footer">
+                <a className="link" href="#" onClick={(e) => { e.preventDefault(); void saveProgress(); }}>
                   Save progress
                 </a>
-              </div>
+              </div>}
             </div>
           )}
+
+          {!readOnly && supersedesPassportId && <div className="discard-update-row">
+            <button className="text-button danger-text" disabled={loading} onClick={() => void discardUpdate()}>Discard this update</button>
+            <small>Your published passport will remain unchanged.</small>
+          </div>}
 
         </div>
       </div>

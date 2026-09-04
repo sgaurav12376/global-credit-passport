@@ -8,6 +8,7 @@ import {
 import type { StoredCreditReport } from "../api/surepass";
 
 type Props = {
+  readOnly?: boolean;
   connected: boolean;
   passportId?: string;
   fullName: string;
@@ -28,7 +29,7 @@ function money(value?: number | null) {
 }
 
 export default function SurepassCreditConnect({
-  connected, passportId, fullName, ensurePassportId, onConnected,
+  readOnly = false, connected, passportId, fullName, ensurePassportId, onConnected,
 }: Props) {
   const initialName = splitName(fullName);
   const [expanded, setExpanded] = useState(false);
@@ -137,7 +138,7 @@ export default function SurepassCreditConnect({
   return (
     <div className={"tile " + (connected || report ? "selected" : "")} style={{ cursor: "default" }}>
       <div className="icon">📊</div>
-      <div style={{ fontWeight: 700 }}>India Credit Bureau</div>
+      <div style={{ fontWeight: 700 }}>Credit history</div>
 
       {report && normalized && (
         <div style={{ marginTop: 8, fontSize: 12 }}>
@@ -175,7 +176,7 @@ export default function SurepassCreditConnect({
         </div>
       )}
 
-      {!expanded ? (
+      {!readOnly && (!expanded ? (
         <button className="btn" type="button" style={{ marginTop: 10 }} onClick={() => setExpanded(true)}>
           {report ? "Fetch updated report" : "Connect credit report"}
         </button>
@@ -223,7 +224,7 @@ export default function SurepassCreditConnect({
             <button className="btn" type="button" disabled={busy} onClick={() => setExpanded(false)}>Cancel</button>
           </div>
         </div>
-      )}
+      ))}
       {history.length > 1 && !expanded && (
         <details style={{ marginTop: 8, textAlign: "left", fontSize: 11 }}>
           <summary style={{ cursor: "pointer" }}>Report history ({history.length})</summary>

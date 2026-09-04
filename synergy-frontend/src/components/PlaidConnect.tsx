@@ -17,6 +17,7 @@ import {
 import type { PlaidConnectionResult, PlaidFinancialSummary } from "../api/plaid";
 
 type PlaidConnectProps = {
+  readOnly?: boolean;
   connected: boolean;
   passportId?: string;
   ensurePassportId?: () => Promise<string>;
@@ -58,6 +59,7 @@ function date(value?: string | null) {
 }
 
 export default function PlaidConnect({
+  readOnly = false,
   connected,
   passportId,
   ensurePassportId,
@@ -75,6 +77,7 @@ export default function PlaidConnect({
   const [showInsights, setShowInsights] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [refreshedBanks, setRefreshedBanks] = useState<Record<string, string>>({});
 
   const totalAccounts = connections.reduce(
     (total, item) => total + (item.identityAndAccounts?.accounts?.length || 0),
@@ -122,11 +125,17 @@ export default function PlaidConnect({
       try {
         if (!publicToken) throw new Error("Plaid did not return a public token.");
         const resolvedPassportId = passportId || await ensurePassportId?.();
-        await connectPlaidItem(publicToken, resolvedPassportId);
+        const result = await connectPlaidItem(publicToken, resolvedPassportId);
         onConnected();
         await loadConnections(resolvedPassportId);
         setSummary(null);
-        setMessage("Bank connected successfully.");
+        setMessage(
+          result.connectionOutcome === "ALREADY_ATTACHED"
+            ? `${institutionName(result)} is already connected to this passport.`
+            : result.connectionOutcome === "EXISTING_CONNECTION_ATTACHED"
+              ? `Existing ${institutionName(result)} connection added to this passport.`
+              : `${institutionName(result)} connected successfully.`
+        );
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Unable to retrieve Plaid data.");
       }
@@ -175,7 +184,11 @@ export default function PlaidConnect({
       const result = await refreshPlaidTransactions(connection.itemId);
       setConnections((current) => current.map((item) => item.itemId === result.itemId ? result : item));
       setSummary(null);
-      setMessage(`${institutionName(connection)} is up to date.`);
+      setRefreshedBanks((current) => ({
+        ...current,
+        [connection.itemId]: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      }));
+      setMessage(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to refresh transactions.");
     } finally {
@@ -189,11 +202,15 @@ export default function PlaidConnect({
     try {
       const resolvedPassportId = passportId || await ensurePassportId?.();
       if (!resolvedPassportId) throw new Error("A passport is required before selecting a bank.");
-      await attachPlaidConnection(connection.itemId, resolvedPassportId);
+      const result = await attachPlaidConnection(connection.itemId, resolvedPassportId);
       await loadConnections(resolvedPassportId);
       setSummary(null);
       onConnected();
-      setMessage(`${institutionName(connection)} is now used for this passport.`);
+      setMessage(
+        result.connectionOutcome === "ALREADY_ATTACHED"
+          ? `${institutionName(connection)} is already connected to this passport.`
+          : `${institutionName(connection)} added to this passport.`
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to use this bank.");
     } finally {
@@ -247,7 +264,7 @@ export default function PlaidConnect({
             <b>{totalAccounts}</b> accounts · <b>{totalTransactions}</b> transactions
           </div>
 
-          <div style={{ maxHeight: 150, overflowY: "auto", display: "grid", gap: 6, marginTop: 9 }}>
+          {showManage && <div style={{ maxHeight: 150, overflowY: "auto", display: "grid", gap: 6, marginTop: 9 }}>
             {connections.map((connection) => {
               const accountCount = connection.identityAndAccounts?.accounts?.length || 0;
               const transactionCount = connection.addedTransactions?.length || 0;
@@ -262,23 +279,26 @@ export default function PlaidConnect({
                       <div className="hint" style={{ textAlign: "left", fontSize: 11 }}>
                         {accountCount} accounts · {transactionCount || "Pending"} transactions
                       </div>
+                      {refreshedBanks[connection.itemId] && <div style={{ color: "#18794e", fontSize: 11 }}>
+                        ✓ Refreshed at {refreshedBanks[connection.itemId]}
+                      </div>}
                     </div>
-                    <button className="btn" type="button" style={compactButtonStyle} disabled={busy} onClick={() => refreshConnection(connection)}>
+                    {!readOnly && <button className="btn" type="button" style={compactButtonStyle} disabled={busy} onClick={() => refreshConnection(connection)}>
                       {busy ? "..." : "Refresh"}
-                    </button>
+                    </button>}
                   </div>
                 </div>
               );
             })}
-          </div>
+          </div>}
 
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 7, marginTop: 9 }}>
             <button className="btn" type="button" style={compactButtonStyle} onClick={toggleInsights}>
               {showInsights ? "Hide insights" : "Cash-flow insights"}
             </button>
-            <button className="btn" type="button" style={compactButtonStyle} onClick={() => setShowManage(!showManage)}>
-              {showManage ? "Close manage" : "Manage"}
-            </button>
+            {!readOnly && <button className="btn" type="button" style={compactButtonStyle} onClick={() => setShowManage(!showManage)}>
+              {showManage ? "Hide banks" : "View banks"}
+            </button>}
           </div>
 
           {showInsights && summary && (
@@ -300,7 +320,7 @@ export default function PlaidConnect({
             </div>
           )}
 
-          {showManage && (
+          {showManage && !readOnly && (
             <div style={{ display: "grid", gap: 6, marginTop: 9 }}>
               {connections.map((connection) => {
                 const masks = (connection.identityAndAccounts?.accounts || [])
@@ -329,7 +349,7 @@ export default function PlaidConnect({
         </div>
       )}
 
-      {availableConnections.length > 0 && (
+      {!readOnly && availableConnections.length > 0 && (
         <div style={{ marginTop: 10, textAlign: "left" }}>
           <div style={{ fontWeight: 700, fontSize: 12 }}>Existing bank connections</div>
           <div style={{ maxHeight: 125, overflowY: "auto", display: "grid", gap: 6, marginTop: 6 }}>
@@ -351,9 +371,9 @@ export default function PlaidConnect({
         </div>
       )}
 
-      <button className="btn" type="button" onClick={startPlaid} disabled={openingPlaid || !!busyItemId} style={{ marginTop: 10 }}>
+      {!readOnly && <button className="btn" type="button" onClick={startPlaid} disabled={openingPlaid || !!busyItemId} style={{ marginTop: 10 }}>
         {openingPlaid ? "Opening Plaid..." : "Connect another bank"}
-      </button>
+      </button>}
       {message && <div style={{ fontSize: 11, marginTop: 7 }}>{message}</div>}
     </div>
   );

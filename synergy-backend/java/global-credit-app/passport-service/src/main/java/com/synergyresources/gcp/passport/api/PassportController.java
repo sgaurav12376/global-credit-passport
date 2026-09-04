@@ -26,6 +26,31 @@ public class PassportController {
     return service.init(currentUserId(), req);
   }
 
+  @PostMapping("/{passportId}/update-draft")
+  public Dto.InitResponse updateDraft(@PathVariable UUID passportId) {
+    return service.getOrCreateUpdateDraft(currentUserId(), passportId);
+  }
+
+  @PatchMapping("/{passportId}")
+  public Dto.PassportView saveDraft(
+      @PathVariable UUID passportId,
+      @Valid @RequestBody Dto.UpdateDraftRequest request
+  ) {
+    return service.updateDraft(currentUserId(), passportId, request);
+  }
+
+  @PostMapping("/{passportId}/identity-submission")
+  public Dto.IdentitySubmissionResponse recordIdentitySubmission(
+      @PathVariable UUID passportId
+  ) {
+    return service.recordIdentitySubmission(currentUserId(), passportId);
+  }
+
+  @PostMapping("/{passportId}/cancel-update")
+  public void cancelUpdate(@PathVariable UUID passportId) {
+    service.cancelUpdate(currentUserId(), passportId);
+  }
+
   @GetMapping("/latest")
   public Dto.PassportView latest() {
     return service.latest(currentUserId());

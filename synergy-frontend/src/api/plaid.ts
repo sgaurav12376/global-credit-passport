@@ -62,6 +62,12 @@ export type PlaidConnectionResult = {
   transactionPages: number;
   status: string;
   createdAt: string;
+  connectionOutcome?:
+    | "NEW_CONNECTION"
+    | "EXISTING_CONNECTION_ATTACHED"
+    | "ALREADY_ATTACHED"
+    | "REFRESHED"
+    | null;
 };
 
 export type PlaidMonthlyCashflow = {

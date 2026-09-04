@@ -25,6 +25,9 @@ public class Dto {
       String fullName,
       LocalDate dob,
       UUID supersedesPassportId,
+      String identityStatus,
+      java.time.Instant identityCompletedAt,
+      String currentSection,
       boolean plaidConnected,
       boolean creditReportConnected,
       java.time.Instant createdAt,
@@ -40,5 +43,20 @@ public class Dto {
 
   public static class SourceConnectRequest {
     @NotNull public List<String> sources;
+  }
+
+  public static class UpdateDraftRequest {
+    @NotBlank public String purpose;
+    @NotBlank public String originCountry;
+    @NotBlank public String destCountry;
+    @NotBlank public String fullName;
+    @NotNull public LocalDate dob;
+    public String currentSection;
+  }
+
+  public record IdentitySubmissionResponse(
+      String identityStatus,
+      java.time.Instant completedAt
+  ) {
   }
 }

@@ -26,6 +26,15 @@ export type PassportInitRequest = {
   supersedesPassportId?: string;
 };
 
+export type PassportDraftUpdate = {
+  purpose: string;
+  originCountry: string;
+  destCountry: string;
+  fullName: string;
+  dob: string;
+  currentSection?: string;
+};
+
 export type PassportView = {
   passportId: string;
   status: string;
@@ -35,6 +44,9 @@ export type PassportView = {
   fullName?: string | null;
   dob?: string | null;
   supersedesPassportId?: string | null;
+  identityStatus?: string | null;
+  identityCompletedAt?: string | null;
+  currentSection?: string | null;
   plaidConnected: boolean;
   creditReportConnected: boolean;
   createdAt: string;
@@ -55,6 +67,39 @@ export async function initPassport(payload: PassportInitRequest) {
   });
   await ensureOk(res, "initPassport");
   return (await res.json()) as { passportId: string; status?: string };
+}
+
+export async function getOrCreatePassportUpdateDraft(passportId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/update-draft`, {
+    method: "POST",
+  });
+  await ensureOk(res, "getOrCreatePassportUpdateDraft");
+  return (await res.json()) as { passportId: string; status?: string };
+}
+
+export async function updatePassportDraft(passportId: string, payload: PassportDraftUpdate) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await ensureOk(res, "Save passport changes");
+  return (await res.json()) as PassportView;
+}
+
+export async function recordEntrustSubmission(passportId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/identity-submission`, {
+    method: "POST",
+  });
+  await ensureOk(res, "Save identity verification");
+  return (await res.json()) as { identityStatus: string; completedAt: string };
+}
+
+export async function cancelPassportUpdate(passportId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/cancel-update`, {
+    method: "POST",
+  });
+  await ensureOk(res, "Discard passport changes");
 }
 
 export async function connectSources(passportId: string, sources: string[]) {

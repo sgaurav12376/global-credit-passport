@@ -9,5 +9,8 @@ import java.util.UUID;
 public interface PassportRepo extends JpaRepository<Passport, UUID> {
   Optional<Passport> findByIdAndUserId(UUID id, UUID userId);
   Optional<Passport> findFirstByUserIdOrderByUpdatedAtDesc(UUID userId);
+  Optional<Passport> findFirstByUserIdAndSupersedesPassportIdAndStatusOrderByCreatedAtDesc(
+      UUID userId, UUID supersedesPassportId, String status
+  );
   List<Passport> findAllByUserIdOrderByUpdatedAtDesc(UUID userId);
 }

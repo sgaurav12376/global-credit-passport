@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 import java.util.List;
+import java.time.Instant;
+import java.util.Objects;
 
 @Service
 public class PassportService {
@@ -54,6 +56,13 @@ public class PassportService {
     p.setFullName(req.fullName);
     p.setDob(req.dob);
     p.setSupersedesPassportId(req.supersedesPassportId);
+    p.setCurrentSection(supersededPassport == null ? "PURPOSE" : "OVERVIEW");
+    if (supersededPassport != null) {
+      p.setIdentityStatus(supersededPassport.getIdentityStatus());
+      p.setIdentityCompletedAt(supersededPassport.getIdentityCompletedAt());
+      p.setIdentityVerifiedName(supersededPassport.getIdentityVerifiedName());
+      p.setIdentityVerifiedDob(supersededPassport.getIdentityVerifiedDob());
+    }
     p.setStatus("IN_PROGRESS");
     passportRepo.saveAndFlush(p);
 
@@ -104,6 +113,103 @@ public class PassportService {
     return new Dto.InitResponse(p.getId(), p.getStatus());
   }
 
+  @Transactional
+  public Dto.InitResponse getOrCreateUpdateDraft(UUID userId, UUID sourcePassportId) {
+    Passport source = passportRepo.findByIdAndUserId(sourcePassportId, userId)
+        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+
+    return passportRepo
+        .findFirstByUserIdAndSupersedesPassportIdAndStatusOrderByCreatedAtDesc(
+            userId, sourcePassportId, "IN_PROGRESS"
+        )
+        .map(existing -> new Dto.InitResponse(existing.getId(), existing.getStatus()))
+        .orElseGet(() -> {
+          Dto.InitRequest request = new Dto.InitRequest();
+          request.purpose = source.getPurpose();
+          request.originCountry = source.getOriginCountry();
+          request.destCountry = source.getDestCountry();
+          request.fullName = source.getFullName();
+          request.dob = source.getDob();
+          request.supersedesPassportId = source.getId();
+          return init(userId, request);
+        });
+  }
+
+  @Transactional
+  public Dto.PassportView updateDraft(UUID userId, UUID passportId, Dto.UpdateDraftRequest request) {
+    Passport passport = passportRepo.findByIdAndUserId(passportId, userId)
+        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+    if (!"IN_PROGRESS".equals(passport.getStatus()) && !"DRAFT".equals(passport.getStatus())) {
+      throw new IllegalStateException("Published passports cannot be edited. Start an update first.");
+    }
+    boolean identityChanged = !sameIdentityName(
+        passport.getIdentityVerifiedName(), request.fullName
+    ) || !Objects.equals(passport.getIdentityVerifiedDob(), request.dob);
+    passport.setPurpose(request.purpose);
+    passport.setOriginCountry(request.originCountry);
+    passport.setDestCountry(request.destCountry);
+    passport.setFullName(request.fullName.trim());
+    passport.setDob(request.dob);
+    if (request.currentSection != null && !request.currentSection.isBlank()) {
+      passport.setCurrentSection(validSection(request.currentSection));
+    }
+    if (identityChanged && identityWasCompleted(passport.getIdentityStatus())) {
+      passport.setIdentityStatus("REQUIRES_REVERIFICATION");
+      passport.setIdentityCompletedAt(null);
+      passport.setIdentityVerifiedName(null);
+      passport.setIdentityVerifiedDob(null);
+    }
+    passportRepo.saveAndFlush(passport);
+    return view(userId, passport);
+  }
+
+  @Transactional
+  public Dto.IdentitySubmissionResponse recordIdentitySubmission(UUID userId, UUID passportId) {
+    Passport passport = passportRepo.findByIdAndUserId(passportId, userId)
+        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+    if (!"IN_PROGRESS".equals(passport.getStatus()) && !"DRAFT".equals(passport.getStatus())) {
+      throw new IllegalStateException("Start a passport update before submitting identity information.");
+    }
+    if (passport.getFullName() == null || passport.getFullName().isBlank() || passport.getDob() == null) {
+      throw new IllegalStateException("Save the legal name and date of birth before identity verification.");
+    }
+    Instant completedAt = Instant.now();
+    passport.setIdentityStatus("ENTRUST_SUBMITTED");
+    passport.setIdentityCompletedAt(completedAt);
+    passport.setIdentityVerifiedName(passport.getFullName());
+    passport.setIdentityVerifiedDob(passport.getDob());
+    passportRepo.saveAndFlush(passport);
+    return new Dto.IdentitySubmissionResponse(passport.getIdentityStatus(), completedAt);
+  }
+
+  private boolean identityWasCompleted(String status) {
+    return "ENTRUST_SUBMITTED".equals(status) || "PILOT_COMPLETED".equals(status);
+  }
+
+  private boolean sameIdentityName(String verified, String current) {
+    if (verified == null || current == null) return false;
+    return verified.trim().replaceAll("\\s+", " ")
+        .equalsIgnoreCase(current.trim().replaceAll("\\s+", " "));
+  }
+
+  private String validSection(String section) {
+    return switch (section.toUpperCase()) {
+      case "PURPOSE", "IDENTITY", "FINANCIAL", "REVIEW", "OVERVIEW" -> section.toUpperCase();
+      default -> throw new IllegalArgumentException("Unknown passport section");
+    };
+  }
+
+  @Transactional
+  public void cancelUpdate(UUID userId, UUID passportId) {
+    Passport passport = passportRepo.findByIdAndUserId(passportId, userId)
+        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+    if (!"IN_PROGRESS".equals(passport.getStatus()) && !"DRAFT".equals(passport.getStatus())) {
+      throw new IllegalStateException("Only an unfinished update can be discarded");
+    }
+    passport.setStatus("CANCELLED");
+    passportRepo.save(passport);
+  }
+
   @Transactional(readOnly = true)
   public Dto.PassportView latest(UUID userId) {
     return passportRepo.findFirstByUserIdOrderByUpdatedAtDesc(userId)
@@ -137,6 +243,9 @@ public class PassportService {
         passport.getFullName(),
         passport.getDob(),
         passport.getSupersedesPassportId(),
+        passport.getIdentityStatus(),
+        passport.getIdentityCompletedAt(),
+        passport.getCurrentSection(),
         passportPlaidConnectionRepo.existsByBorrowerIdAndPassportIdAndActiveTrue(
             userId, passportId
         ),
@@ -179,8 +288,14 @@ public class PassportService {
           "Connect at least one successful data source to this passport before generating it"
       );
     }
+    if (!identityWasCompleted(p.getIdentityStatus())) {
+      throw new IllegalStateException(
+          "Complete identity verification before publishing this passport"
+      );
+    }
 
     plaidSnapshotService.createIfPlaidConnected(userId, passportId);
+    p.setCurrentSection("OVERVIEW");
     p.setStatus("ACTIVE");
     passportRepo.save(p);
   }

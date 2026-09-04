@@ -60,6 +60,26 @@ public class PlaidService {
     DuplicateConnection duplicate = findDuplicateConnection(borrowerId, identity);
     if (duplicate != null) {
       plaidClient.removeItem(exchange.accessToken());
+      if (passportId != null) {
+        PlaidConnection existing = connectionRepo
+            .findByBorrowerIdAndItemId(borrowerId, duplicate.itemId())
+            .orElseThrow(() -> new IllegalStateException(
+                "Existing Plaid connection could not be loaded"
+            ));
+        boolean alreadyAttached = passportConnectionRepo
+            .findByBorrowerIdAndPassportIdAndPlaidConnectionId(
+                borrowerId, passportId, existing.getId()
+            )
+            .map(PassportPlaidConnection::isActive)
+            .orElse(false);
+        attach(borrowerId, passportId, existing);
+        return toResult(
+            existing,
+            0,
+            passportId,
+            alreadyAttached ? "ALREADY_ATTACHED" : "EXISTING_CONNECTION_ATTACHED"
+        );
+      }
       throw new PlaidDuplicateConnectionException(
           duplicate.institutionName(),
           duplicate.itemId()
@@ -93,7 +113,7 @@ public class PlaidService {
         transactions.removed()
     );
 
-    return toResult(connection, transactions.pages());
+    return toResult(connection, transactions.pages(), passportId, "NEW_CONNECTION");
   }
 
   @Transactional
@@ -135,7 +155,12 @@ public class PlaidService {
         connection.getRemovedTransactions()
     );
 
-    return toResult(connection, transactions.pages());
+    return toResult(
+        connection,
+        transactions.pages(),
+        connection.getPassportId(),
+        "REFRESHED"
+    );
   }
 
   @Transactional(readOnly = true)
@@ -182,9 +207,20 @@ public class PlaidService {
     requireOwnedPassport(borrowerId, passportId);
     PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
         .orElseThrow(() -> new IllegalArgumentException("Plaid connection not found"));
+    boolean alreadyAttached = passportConnectionRepo
+        .findByBorrowerIdAndPassportIdAndPlaidConnectionId(
+            borrowerId, passportId, connection.getId()
+        )
+        .map(PassportPlaidConnection::isActive)
+        .orElse(false);
     refreshTransactions(borrowerId, itemId);
     attach(borrowerId, passportId, connection);
-    return toResult(connection, 0);
+    return toResult(
+        connection,
+        0,
+        passportId,
+        alreadyAttached ? "ALREADY_ATTACHED" : "EXISTING_CONNECTION_ATTACHED"
+    );
   }
 
   @Transactional
@@ -290,6 +326,15 @@ public class PlaidService {
       int pages,
       UUID responsePassportId
   ) {
+    return toResult(connection, pages, responsePassportId, null);
+  }
+
+  private ConnectionResult toResult(
+      PlaidConnection connection,
+      int pages,
+      UUID responsePassportId,
+      String connectionOutcome
+  ) {
     return new ConnectionResult(
         connection.getBorrowerId(),
         responsePassportId,
@@ -301,7 +346,8 @@ public class PlaidService {
         connection.getTransactionsCursor(),
         pages,
         connection.getStatus(),
-        connection.getCreatedAt()
+        connection.getCreatedAt(),
+        connectionOutcome
     );
   }
 
@@ -319,7 +365,8 @@ public class PlaidService {
       String nextCursor,
       int transactionPages,
       String status,
-      java.time.Instant createdAt
+      java.time.Instant createdAt,
+      String connectionOutcome
   ) {
   }
 }

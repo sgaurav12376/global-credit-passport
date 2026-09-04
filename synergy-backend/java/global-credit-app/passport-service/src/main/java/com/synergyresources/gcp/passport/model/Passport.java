@@ -18,6 +18,11 @@ public class Passport {
   @Column(name="full_name") private String fullName;
   @Column(name="dob") private LocalDate dob;
   @Column(name="supersedes_passport_id") private UUID supersedesPassportId;
+  @Column(name="identity_status", nullable=false) private String identityStatus;
+  @Column(name="identity_completed_at") private Instant identityCompletedAt;
+  @Column(name="identity_verified_name") private String identityVerifiedName;
+  @Column(name="identity_verified_dob") private LocalDate identityVerifiedDob;
+  @Column(name="current_section", nullable=false) private String currentSection;
 
   @Column(nullable=false) private String status;
 
@@ -30,6 +35,8 @@ public class Passport {
     if (createdAt == null) createdAt = now;
     updatedAt = now;
     if (status == null) status = "DRAFT";
+    if (identityStatus == null) identityStatus = "NOT_STARTED";
+    if (currentSection == null) currentSection = "PURPOSE";
   }
   @PreUpdate void preUpdate() { updatedAt = Instant.now(); }
 
@@ -48,6 +55,16 @@ public class Passport {
   public void setDob(LocalDate dob) { this.dob = dob; }
   public UUID getSupersedesPassportId() { return supersedesPassportId; }
   public void setSupersedesPassportId(UUID value) { supersedesPassportId = value; }
+  public String getIdentityStatus() { return identityStatus; }
+  public void setIdentityStatus(String value) { identityStatus = value; }
+  public Instant getIdentityCompletedAt() { return identityCompletedAt; }
+  public void setIdentityCompletedAt(Instant value) { identityCompletedAt = value; }
+  public String getIdentityVerifiedName() { return identityVerifiedName; }
+  public void setIdentityVerifiedName(String value) { identityVerifiedName = value; }
+  public LocalDate getIdentityVerifiedDob() { return identityVerifiedDob; }
+  public void setIdentityVerifiedDob(LocalDate value) { identityVerifiedDob = value; }
+  public String getCurrentSection() { return currentSection; }
+  public void setCurrentSection(String value) { currentSection = value; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public Instant getCreatedAt() { return createdAt; }
