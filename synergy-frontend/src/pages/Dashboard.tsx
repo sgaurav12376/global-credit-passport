@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getLatestPassport, getPassportHistory } from "../api/passport";
-import type { PassportView } from "../api/passport";
+import { getLatestPassport, getPassportHistory, getPassportOutput } from "../api/passport";
+import type { PassportOutput, PassportView } from "../api/passport";
 import { getAccessToken, logout } from "../auth/auth";
 
 const PASSPORT_LS_KEY = "gcp.passportInit";
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [latest, setLatest] = useState<PassportView | null>(null);
   const [history, setHistory] = useState<PassportView[]>([]);
+  const [output, setOutput] = useState<PassportOutput | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const active = useMemo(() => history.find((item) => item.status === "ACTIVE") || latest, [history, latest]);
@@ -36,6 +37,8 @@ export default function Dashboard() {
         if (!await getAccessToken()) return nav("/login");
         const [latestPassport, passports] = await Promise.all([getLatestPassport(), getPassportHistory()]);
         setLatest(latestPassport); setHistory(passports);
+        const published = passports.find((item) => item.status === "ACTIVE");
+        if (published) setOutput(await getPassportOutput(published.passportId));
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Unable to load your passport.");
       } finally { setLoading(false); }
@@ -71,6 +74,14 @@ export default function Dashboard() {
           <button className="btn primary-action" onClick={() => open(draft, "edit")}>Continue update</button>
         </> : <button className="btn primary-action" onClick={() => open(active, "view", 4)}>Open passport</button>}
       </section>
+      {output && <section className="simple-card passport-summary-card">
+        <div className="summary-heading"><div><span className="eyebrow">UNIFIED OUTPUT</span><h2>Global Credit Passport</h2><p>{output.schemaVersion}</p></div><span className="status-pill light">✓ {output.document.status}</span></div>
+        <div className="source-summary-row">
+          <div><span className={output.document.coverage.creditBureauAvailable ? "dot ready" : "dot"}/><p><b>Surepass</b><small>{output.document.coverage.creditBureauAvailable ? "Included" : "Not included"}</small></p></div>
+          <div><span className={output.document.coverage.openBankingAvailable ? "dot ready" : "dot"}/><p><b>Plaid</b><small>{output.document.coverage.openBankingAvailable ? "Included" : "Not included"}</small></p></div>
+          <div><span className="dot ready"/><p><b>Entrust</b><small>{output.document.identityVerification.status} · sandbox non-blocking</small></p></div>
+        </div>
+      </section>}
       <details className="history-disclosure"><summary>Activity and passport history</summary><div className="version-list">{history.filter((item) => item.status !== "CANCELLED").map((item) => <button key={item.passportId} onClick={() => open(item, "view")}><span><b>{item.originCountry} → {item.destCountry}</b><small>{new Date(item.updatedAt).toLocaleString()}</small></span><em>{uiStatus(item.status)}</em></button>)}</div></details>
     </>}
   </main></div>;

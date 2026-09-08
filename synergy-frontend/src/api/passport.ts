@@ -56,6 +56,35 @@ export type PassportView = {
   updatedAt: string;
 };
 
+export type PassportOutput = {
+  outputId: string;
+  passportId: string;
+  schemaVersion: string;
+  createdAt: string;
+  document: {
+    status: string;
+    identityVerification: {
+      provider: string;
+      status: string;
+      sandboxSimulation: boolean;
+      approvalRequiredForPilot: boolean;
+    };
+    verifiedSources: {
+      openBanking: null | { provider: string; summary: Record<string, unknown> };
+      creditBureau: null | {
+        provider: string;
+        bureau: string;
+        normalizedReport: Record<string, unknown>;
+      };
+    };
+    coverage: {
+      sourceCount: number;
+      openBankingAvailable: boolean;
+      creditBureauAvailable: boolean;
+    };
+  };
+};
+
 async function ensureOk(res: Response, label: string) {
   if (res.ok) return;
   const txt = await res.text().catch(() => "");
@@ -111,6 +140,14 @@ export async function generatePassport(passportId: string) {
     method: "POST",
   });
   await ensureOk(res, "generatePassport");
+  return (await res.json()) as PassportOutput;
+}
+
+export async function getPassportOutput(passportId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/output`);
+  if (res.status === 404) return null;
+  await ensureOk(res, "getPassportOutput");
+  return (await res.json()) as PassportOutput;
 }
 
 export async function getLatestPassport() {

@@ -19,6 +19,10 @@ gcp:
     local-borrower-id: ${GCP_LOCAL_BORROWER_ID:00000000-0000-0000-0000-000000000001}
     cognito-issuer-uri: ${COGNITO_ISSUER_URI:}
     cognito-client-id: ${COGNITO_USER_POOL_CLIENT_ID:}
+  pilot:
+    # Sandbox submissions are recorded as evidence but do not require provider approval.
+    # Set false outside the pilot; production then requires identity status APPROVED.
+    sandbox-identity-policy: ${GCP_SANDBOX_IDENTITY_POLICY:true}
 
 management:
   endpoints:

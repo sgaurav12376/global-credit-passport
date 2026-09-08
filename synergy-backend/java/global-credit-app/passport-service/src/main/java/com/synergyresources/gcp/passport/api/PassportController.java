@@ -2,6 +2,7 @@ package com.synergyresources.gcp.passport.api;
 
 import com.synergyresources.gcp.passport.api.Dto;
 import com.synergyresources.gcp.passport.service.PassportService;
+import com.synergyresources.gcp.passport.service.PassportOutputService;
 import com.synergyresources.gcp.passport.security.CurrentBorrower;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -65,8 +66,13 @@ public class PassportController {
   }
 
   @PostMapping("/{passportId}/generate")
-  public void generate(@PathVariable UUID passportId) {
-    service.generate(currentUserId(), passportId);
+  public PassportOutputService.View generate(@PathVariable UUID passportId) {
+    return service.generate(currentUserId(), passportId);
+  }
+
+  @GetMapping("/{passportId}/output")
+  public PassportOutputService.View output(@PathVariable UUID passportId) {
+    return service.output(currentUserId(), passportId);
   }
 
   @ExceptionHandler(IllegalStateException.class)

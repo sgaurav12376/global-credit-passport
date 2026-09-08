@@ -9,7 +9,9 @@ import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
+import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
@@ -23,19 +25,28 @@ public class PassportService {
   private final PlaidFinancialSnapshotService plaidSnapshotService;
   private final PassportPlaidConnectionRepo passportPlaidConnectionRepo;
   private final SurepassCreditReportRepo surepassReportRepo;
+  private final PassportOutputService passportOutputService;
+  private final boolean sandboxIdentityPolicy;
+  private final EntrustVerificationRepo entrustVerificationRepo;
 
   public PassportService(
       PassportRepo passportRepo,
       PassportSourceRepo sourceRepo,
       PlaidFinancialSnapshotService plaidSnapshotService,
       PassportPlaidConnectionRepo passportPlaidConnectionRepo,
-      SurepassCreditReportRepo surepassReportRepo
+      SurepassCreditReportRepo surepassReportRepo,
+      PassportOutputService passportOutputService,
+      EntrustVerificationRepo entrustVerificationRepo,
+      @Value("${gcp.pilot.sandbox-identity-policy:true}") boolean sandboxIdentityPolicy
   ) {
     this.passportRepo = passportRepo;
     this.sourceRepo = sourceRepo;
     this.plaidSnapshotService = plaidSnapshotService;
     this.passportPlaidConnectionRepo = passportPlaidConnectionRepo;
     this.surepassReportRepo = surepassReportRepo;
+    this.passportOutputService = passportOutputService;
+    this.entrustVerificationRepo = entrustVerificationRepo;
+    this.sandboxIdentityPolicy = sandboxIdentityPolicy;
   }
 
   @Transactional
@@ -267,7 +278,7 @@ public class PassportService {
   }
 
   @Transactional
-  public void generate(UUID userId, UUID passportId) {
+  public PassportOutputService.View generate(UUID userId, UUID passportId) {
     Passport p = passportRepo.findByIdAndUserId(passportId, userId)
       .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
 
@@ -281,15 +292,36 @@ public class PassportService {
           "Connect at least one successful data source to this passport before generating it"
       );
     }
-    if (!identityWasCompleted(p.getIdentityStatus())) {
+    if (!identityCanPublish(userId, passportId, p.getIdentityStatus())) {
       throw new IllegalStateException(
-          "Complete identity verification before publishing this passport"
+          sandboxIdentityPolicy
+              ? "Record the Entrust sandbox submission before publishing this passport"
+              : "Entrust approval is required before publishing this passport"
       );
     }
 
     plaidSnapshotService.createIfPlaidConnected(userId, passportId);
+    var output = passportOutputService.create(userId, p, sandboxIdentityPolicy);
     p.setCurrentSection("OVERVIEW");
     p.setStatus("ACTIVE");
     passportRepo.save(p);
+    return PassportOutputService.View.from(output);
+  }
+
+  private boolean identityCanPublish(UUID userId, UUID passportId, String passportStatus) {
+    var verification = entrustVerificationRepo
+        .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(userId, passportId);
+    if (sandboxIdentityPolicy) {
+      return verification.isPresent();
+    }
+    return verification.map(value -> "APPROVED".equals(value.getStatus())).orElse(false)
+        && "ENTRUST_APPROVED".equals(passportStatus);
+  }
+
+  @Transactional(readOnly = true)
+  public PassportOutputService.View output(UUID userId, UUID passportId) {
+    passportRepo.findByIdAndUserId(passportId, userId)
+        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
+    return PassportOutputService.View.from(passportOutputService.latest(userId, passportId));
   }
 }

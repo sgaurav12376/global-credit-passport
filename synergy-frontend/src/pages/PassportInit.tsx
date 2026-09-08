@@ -327,13 +327,10 @@ export default function PassportInit() {
 
       // 1) reuse the draft created for provider connections, or create it now
       const resolvedPassportId = await ensurePassportId();
-      const savedPassport = await saveDetails(resolvedPassportId);
-      if (
-        savedPassport.identityStatus !== "ENTRUST_APPROVED" &&
-        savedPassport.identityStatus !== "PILOT_COMPLETED"
-      ) {
+      await saveDetails(resolvedPassportId);
+      if (!entrustVerification) {
         setStep(2);
-        throw new Error("Complete identity verification before publishing this passport.");
+        throw new Error("Record the Entrust sandbox submission before publishing this passport.");
       }
 
       // 2) connect sources (based on toggles)
