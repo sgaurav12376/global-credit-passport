@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
-import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePassportUpdateDraft, initPassport, recordEntrustSubmission, updatePassportDraft } from "../api/passport";
+import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePassportUpdateDraft, initPassport, updatePassportDraft } from "../api/passport";
+import { getEntrustVerification, refreshEntrustVerification, startEntrustVerification as startEntrust } from "../api/entrust";
+import type { EntrustVerification } from "../api/entrust";
 import PlaidConnect from "../components/PlaidConnect";
 import SurepassCreditConnect from "../components/SurepassCreditConnect";
-
-const ENTRUST_WORKFLOW_URL =
-  import.meta.env.VITE_ENTRUST_SMART_CAPTURE_URL;
 
 type PassportInitState = {
   status: "not_started" | "in_progress" | "complete";
   origin?: string;
   destination?: string;
+  residenceCountry?: string;
   fullName?: string;
   dob?: string; // YYYY-MM-DD
   purpose?: string; // LOAN/BANK/RENT/EMPLOYMENT
@@ -65,6 +65,7 @@ export default function PassportInit() {
 
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
+  const [residenceCountry, setResidenceCountry] = useState("");
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
   const [creditBureau, setCreditBureau] = useState(false);
@@ -74,6 +75,7 @@ export default function PassportInit() {
   );
   const [entrustStarted, setEntrustStarted] = useState(false);
   const [entrustCompleted, setEntrustCompleted] = useState(false);
+  const [entrustVerification, setEntrustVerification] = useState<EntrustVerification | null>(null);
   const [mode, setMode] = useState<"view" | "edit">(() => loadInit().mode || "edit");
   const [supersedesPassportId, setSupersedesPassportId] = useState<string | undefined>(
     () => loadInit().supersedesPassportId
@@ -107,6 +109,7 @@ export default function PassportInit() {
     if (init?.status === "in_progress") {
       setOrigin(init.origin ?? "");
       setDestination(init.destination ?? "");
+      setResidenceCountry(init.residenceCountry ?? init.origin ?? "");
       setFullName(init.fullName ?? "");
       setDob(init.dob ?? "");
       setCreditBureau(!!init.sources?.creditBureau);
@@ -114,7 +117,7 @@ export default function PassportInit() {
       setPassportId(init.passportId);
       setSupersedesPassportId(init.supersedesPassportId);
       setEntrustCompleted(
-        init.identityStatus === "ENTRUST_SUBMITTED" || init.identityStatus === "PILOT_COMPLETED"
+        init.identityStatus === "ENTRUST_APPROVED" || init.identityStatus === "PILOT_COMPLETED"
       );
 
       if (init.startStep) {
@@ -137,6 +140,7 @@ export default function PassportInit() {
       status: "in_progress",
       origin,
       destination,
+      residenceCountry,
       fullName,
       dob,
       sources: { creditBureau, bank },
@@ -153,6 +157,7 @@ export default function PassportInit() {
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
       originCountry: origin,
       destCountry: destination,
+      residenceCountry,
       fullName: fullName.trim(),
       dob,
       currentSection,
@@ -160,13 +165,14 @@ export default function PassportInit() {
     persistInProgress({
       origin: saved.originCountry,
       destination: saved.destCountry,
+      residenceCountry: saved.residenceCountry,
       fullName: saved.fullName || "",
       dob: saved.dob || "",
       identityStatus: saved.identityStatus,
       identityCompletedAt: saved.identityCompletedAt,
     });
     setEntrustCompleted(
-      saved.identityStatus === "ENTRUST_SUBMITTED" || saved.identityStatus === "PILOT_COMPLETED"
+      saved.identityStatus === "ENTRUST_APPROVED" || saved.identityStatus === "PILOT_COMPLETED"
     );
     setSaveMessage("Saved to your passport");
     return saved;
@@ -174,7 +180,7 @@ export default function PassportInit() {
 
   async function saveProgress() {
     persistInProgress();
-    if (!origin || !destination || !fullName.trim() || !dob) {
+    if (!origin || !destination || !fullName.trim() || !dob || !residenceCountry) {
       setSaveMessage("Progress saved on this device");
       return;
     }
@@ -212,8 +218,13 @@ export default function PassportInit() {
   async function nextFromStep2() {
     setErr(null);
 
-    if (!fullName.trim() || !dob) {
-      setErr("Please enter your full name and date of birth.");
+    if (!fullName.trim() || !dob || !residenceCountry) {
+      setErr("Please enter your full name, date of birth and country of residence.");
+      return;
+    }
+
+    if (!entrustCompleted) {
+      setErr("Complete identity verification before continuing.");
       return;
     }
 
@@ -254,40 +265,58 @@ export default function PassportInit() {
     } finally { setLoading(false); }
   }
 
-  function startEntrustVerification() {
+  async function startEntrustVerification() {
     setErr(null);
-
-    if (!ENTRUST_WORKFLOW_URL) {
-      setErr("Entrust verification URL is not configured.");
-      return;
-    }
-
-    setEntrustStarted(true);
-
-    window.open(
-      ENTRUST_WORKFLOW_URL,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  }
-
-  async function confirmEntrustCompletion() {
+    const captureWindow = window.open("", "_blank");
+    if (captureWindow) captureWindow.opener = null;
     setLoading(true);
-    setErr(null);
     try {
       const resolvedPassportId = await ensurePassportId();
       await saveDetails(resolvedPassportId);
-      const result = await recordEntrustSubmission(resolvedPassportId);
-      setEntrustCompleted(true);
-      persistInProgress({
-        identityStatus: result.identityStatus,
-        identityCompletedAt: result.completedAt,
-      });
-      setSaveMessage("Identity submission saved");
+      const result = await startEntrust(resolvedPassportId);
+      if (!result?.captureUrl) throw new Error("Entrust did not return a verification link.");
+      setEntrustVerification(result);
+      setEntrustStarted(true);
+      if (captureWindow) {
+        captureWindow.location.href = result.captureUrl;
+      } else {
+        setErr("Your browser blocked the Entrust window. Allow pop-ups and select Reopen Entrust verification.");
+      }
     } catch (error) {
-      setErr(error instanceof Error ? error.message : "Unable to save identity completion.");
+      captureWindow?.close();
+      setErr(error instanceof Error ? error.message : "Unable to start identity verification.");
     } finally { setLoading(false); }
   }
+
+  async function checkEntrustStatus() {
+    if (!passportId) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      const result = await refreshEntrustVerification(passportId);
+      setEntrustVerification(result);
+      const approved = result?.status === "APPROVED";
+      setEntrustCompleted(approved);
+      if (approved) {
+        persistInProgress({ identityStatus: "ENTRUST_APPROVED", identityCompletedAt: result.completedAt });
+        setSaveMessage("Identity verified by Entrust");
+      }
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to check identity status.");
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => {
+    if (!passportId) return;
+    void getEntrustVerification(passportId)
+      .then((result) => {
+        if (!result) return;
+        setEntrustVerification(result);
+        setEntrustStarted(true);
+        setEntrustCompleted(result.status === "APPROVED");
+      })
+      .catch(() => undefined);
+  }, [passportId]);
 
   async function createPassport() {
     setErr(null);
@@ -300,7 +329,7 @@ export default function PassportInit() {
       const resolvedPassportId = await ensurePassportId();
       const savedPassport = await saveDetails(resolvedPassportId);
       if (
-        savedPassport.identityStatus !== "ENTRUST_SUBMITTED" &&
+        savedPassport.identityStatus !== "ENTRUST_APPROVED" &&
         savedPassport.identityStatus !== "PILOT_COMPLETED"
       ) {
         setStep(2);
@@ -326,6 +355,7 @@ export default function PassportInit() {
         passportId: resolvedPassportId,
         origin,
         destination,
+        residenceCountry,
         fullName: fullName.trim(),
         dob,
         sources: { creditBureau, bank },
@@ -343,13 +373,14 @@ export default function PassportInit() {
 
   async function ensurePassportId(): Promise<string> {
     if (passportId) return passportId;
-    if (!origin || !destination || !fullName.trim() || !dob) {
+    if (!origin || !destination || !fullName.trim() || !dob || !residenceCountry) {
       throw new Error("Complete corridor and profile details before connecting a data source.");
     }
     const result = await initPassport({
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
       originCountry: origin,
       destCountry: destination,
+      residenceCountry,
       fullName: fullName.trim(),
       dob,
       supersedesPassportId: init.supersedesPassportId,
@@ -370,6 +401,7 @@ export default function PassportInit() {
         purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
         originCountry: origin,
         destCountry: destination,
+        residenceCountry,
         fullName: fullName.trim(),
         dob,
         currentSection: section,
@@ -527,6 +559,18 @@ export default function PassportInit() {
                 onChange={(e) => setDob(e.target.value)}
               />
 
+              <div className="label">Country of Residence</div>
+              <select
+                className="input"
+                disabled={readOnly}
+                value={residenceCountry}
+                onChange={(e) => setResidenceCountry(e.target.value)}
+              >
+                <option value="">Select country</option>
+                <option value="IN">India</option>
+                <option value="US">United States</option>
+              </select>
+
               <div
                 style={{
                   border: "1px solid var(--border)",
@@ -554,7 +598,7 @@ export default function PassportInit() {
                   className="btn"
                   type="button"
                   disabled={readOnly}
-                  onClick={startEntrustVerification}
+                  onClick={() => void startEntrustVerification()}
                   style={{ marginTop: 12 }}
                 >
                   {entrustStarted
@@ -568,19 +612,33 @@ export default function PassportInit() {
                       className="hint"
                       style={{ textAlign: "left" }}
                     >
-                      After Entrust displays “Thank you,” close that tab,
-                      return here and confirm that you completed the steps.
+                      Complete the Entrust steps in the opened tab, then return here and check the result.
                     </div>
 
                     <button
                       className="btn"
                       type="button"
                       disabled={loading}
-                      onClick={() => void confirmEntrustCompletion()}
+                      onClick={() => void checkEntrustStatus()}
                       style={{ marginTop: 10 }}
                     >
-                      {loading ? "Saving..." : "I have completed the Entrust steps"}
+                      {loading ? "Checking..." : "Check verification result"}
                     </button>
+                    {entrustVerification?.status === "PROCESSING" && (
+                      <div className="hint" style={{ textAlign: "left", marginTop: 8 }}>
+                        Entrust is processing your verification.
+                      </div>
+                    )}
+                    {entrustVerification?.status === "DECLINED" && (
+                      <div style={{ color: "#b42318", fontSize: 13, marginTop: 8 }}>
+                        Entrust could not verify the submitted information. Review the details and try again.
+                      </div>
+                    )}
+                    {entrustVerification?.status === "ERROR" && (
+                      <div style={{ color: "#b42318", fontSize: 13, marginTop: 8 }}>
+                        Entrust could not complete the verification{entrustVerification.providerError ? `: ${entrustVerification.providerError}` : "."}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -592,7 +650,7 @@ export default function PassportInit() {
                       marginTop: 12,
                     }}
                   >
-                    ✓ Entrust submission recorded — provider confirmation pending
+                    ✓ Identity verified by Entrust
                   </div>
                 )}
               </div>

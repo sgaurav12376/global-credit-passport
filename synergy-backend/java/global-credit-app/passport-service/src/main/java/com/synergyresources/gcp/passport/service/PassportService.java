@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 import java.util.List;
-import java.time.Instant;
 import java.util.Objects;
 
 @Service
@@ -53,6 +52,10 @@ public class PassportService {
     p.setPurpose(req.purpose);
     p.setOriginCountry(req.originCountry);
     p.setDestCountry(req.destCountry);
+    p.setResidenceCountry(
+        req.residenceCountry == null || req.residenceCountry.isBlank()
+            ? req.originCountry : req.residenceCountry
+    );
     p.setFullName(req.fullName);
     p.setDob(req.dob);
     p.setSupersedesPassportId(req.supersedesPassportId);
@@ -128,6 +131,7 @@ public class PassportService {
           request.purpose = source.getPurpose();
           request.originCountry = source.getOriginCountry();
           request.destCountry = source.getDestCountry();
+          request.residenceCountry = source.getResidenceCountry();
           request.fullName = source.getFullName();
           request.dob = source.getDob();
           request.supersedesPassportId = source.getId();
@@ -144,10 +148,17 @@ public class PassportService {
     }
     boolean identityChanged = !sameIdentityName(
         passport.getIdentityVerifiedName(), request.fullName
-    ) || !Objects.equals(passport.getIdentityVerifiedDob(), request.dob);
+    ) || !Objects.equals(passport.getIdentityVerifiedDob(), request.dob)
+        || (request.residenceCountry != null
+            && !request.residenceCountry.isBlank()
+            && !Objects.equals(passport.getResidenceCountry(), request.residenceCountry));
     passport.setPurpose(request.purpose);
     passport.setOriginCountry(request.originCountry);
     passport.setDestCountry(request.destCountry);
+    passport.setResidenceCountry(
+        request.residenceCountry == null || request.residenceCountry.isBlank()
+            ? passport.getResidenceCountry() : request.residenceCountry
+    );
     passport.setFullName(request.fullName.trim());
     passport.setDob(request.dob);
     if (request.currentSection != null && !request.currentSection.isBlank()) {
@@ -163,27 +174,8 @@ public class PassportService {
     return view(userId, passport);
   }
 
-  @Transactional
-  public Dto.IdentitySubmissionResponse recordIdentitySubmission(UUID userId, UUID passportId) {
-    Passport passport = passportRepo.findByIdAndUserId(passportId, userId)
-        .orElseThrow(() -> new IllegalArgumentException("Passport not found"));
-    if (!"IN_PROGRESS".equals(passport.getStatus()) && !"DRAFT".equals(passport.getStatus())) {
-      throw new IllegalStateException("Start a passport update before submitting identity information.");
-    }
-    if (passport.getFullName() == null || passport.getFullName().isBlank() || passport.getDob() == null) {
-      throw new IllegalStateException("Save the legal name and date of birth before identity verification.");
-    }
-    Instant completedAt = Instant.now();
-    passport.setIdentityStatus("ENTRUST_SUBMITTED");
-    passport.setIdentityCompletedAt(completedAt);
-    passport.setIdentityVerifiedName(passport.getFullName());
-    passport.setIdentityVerifiedDob(passport.getDob());
-    passportRepo.saveAndFlush(passport);
-    return new Dto.IdentitySubmissionResponse(passport.getIdentityStatus(), completedAt);
-  }
-
   private boolean identityWasCompleted(String status) {
-    return "ENTRUST_SUBMITTED".equals(status) || "PILOT_COMPLETED".equals(status);
+    return "ENTRUST_APPROVED".equals(status) || "PILOT_COMPLETED".equals(status);
   }
 
   private boolean sameIdentityName(String verified, String current) {
@@ -240,6 +232,7 @@ public class PassportService {
         passport.getPurpose(),
         passport.getOriginCountry(),
         passport.getDestCountry(),
+        passport.getResidenceCountry(),
         passport.getFullName(),
         passport.getDob(),
         passport.getSupersedesPassportId(),

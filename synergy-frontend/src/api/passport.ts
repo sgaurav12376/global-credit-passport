@@ -21,6 +21,7 @@ export type PassportInitRequest = {
   purpose: string;        // e.g. "LOAN"
   originCountry: string;  // e.g. "IN"
   destCountry: string;    // e.g. "US"
+  residenceCountry: string;
   fullName?: string;
   dob?: string; // YYYY-MM-DD
   supersedesPassportId?: string;
@@ -30,6 +31,7 @@ export type PassportDraftUpdate = {
   purpose: string;
   originCountry: string;
   destCountry: string;
+  residenceCountry: string;
   fullName: string;
   dob: string;
   currentSection?: string;
@@ -41,6 +43,7 @@ export type PassportView = {
   purpose: string;
   originCountry: string;
   destCountry: string;
+  residenceCountry: string;
   fullName?: string | null;
   dob?: string | null;
   supersedesPassportId?: string | null;
@@ -85,14 +88,6 @@ export async function updatePassportDraft(passportId: string, payload: PassportD
   });
   await ensureOk(res, "Save passport changes");
   return (await res.json()) as PassportView;
-}
-
-export async function recordEntrustSubmission(passportId: string) {
-  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/identity-submission`, {
-    method: "POST",
-  });
-  await ensureOk(res, "Save identity verification");
-  return (await res.json()) as { identityStatus: string; completedAt: string };
 }
 
 export async function cancelPassportUpdate(passportId: string) {

@@ -39,13 +39,6 @@ public class PassportController {
     return service.updateDraft(currentUserId(), passportId, request);
   }
 
-  @PostMapping("/{passportId}/identity-submission")
-  public Dto.IdentitySubmissionResponse recordIdentitySubmission(
-      @PathVariable UUID passportId
-  ) {
-    return service.recordIdentitySubmission(currentUserId(), passportId);
-  }
-
   @PostMapping("/{passportId}/cancel-update")
   public void cancelUpdate(@PathVariable UUID passportId) {
     service.cancelUpdate(currentUserId(), passportId);

@@ -38,3 +38,9 @@ surepass:
   bearer-token: ${SUREPASS_BEARER_TOKEN:}
   document-directory: ${SUREPASS_DOCUMENT_DIRECTORY:./data/surepass-reports}
   max-document-bytes: ${SUREPASS_MAX_DOCUMENT_BYTES:20971520}
+
+entrust:
+  enabled: ${ENTRUST_ENABLED:false}
+  base-url: ${ENTRUST_BASE_URL:https://api.us.onfido.com}
+  api-token: ${ENTRUST_API_TOKEN:}
+  workflow-id: ${ENTRUST_WORKFLOW_ID:}
