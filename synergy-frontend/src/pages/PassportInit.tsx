@@ -88,6 +88,8 @@ export default function PassportInit() {
 
   const init = useMemo(() => loadInit(), []);
   const readOnly = mode === "view";
+  const sandboxIdentityReady = entrustVerification?.status === "APPROVED"
+    || entrustVerification?.status === "DECLINED";
 
   function identityDetailsChanged() {
     setEntrustVerification(null);
@@ -230,8 +232,8 @@ export default function PassportInit() {
       return;
     }
 
-    if (!entrustCompleted) {
-      setErr("Complete identity verification before continuing.");
+    if (!sandboxIdentityReady) {
+      setErr("Complete the Entrust sandbox verification before continuing.");
       return;
     }
 
@@ -335,9 +337,9 @@ export default function PassportInit() {
       // 1) reuse the draft created for provider connections, or create it now
       const resolvedPassportId = await ensurePassportId();
       await saveDetails(resolvedPassportId);
-      if (!entrustVerification) {
+      if (!sandboxIdentityReady) {
         setStep(2);
-        throw new Error("Record the Entrust sandbox submission before publishing this passport.");
+        throw new Error("Complete the Entrust sandbox verification before publishing this passport.");
       }
 
       // 2) connect sources (based on toggles)
@@ -643,8 +645,8 @@ export default function PassportInit() {
                       </div>
                     )}
                     {entrustVerification?.status === "DECLINED" && (
-                      <div style={{ color: "#b42318", fontSize: 13, marginTop: 8 }}>
-                        Entrust could not verify the submitted information. Review the details and try again.
+                      <div style={{ color: "#7a5d00", fontSize: 13, marginTop: 8 }}>
+                        Entrust returned a declined sandbox result. The result is recorded and you may continue the pilot.
                       </div>
                     )}
                     {entrustVerification?.status === "ERROR" && (

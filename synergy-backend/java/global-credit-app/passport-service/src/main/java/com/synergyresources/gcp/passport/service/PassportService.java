@@ -316,7 +316,10 @@ public class PassportService {
     var verification = entrustVerificationRepo
         .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(userId, passportId);
     if (sandboxIdentityPolicy) {
-      return verification.isPresent();
+      return verification
+          .map(value -> "APPROVED".equals(value.getStatus())
+              || "DECLINED".equals(value.getStatus()))
+          .orElse(false);
     }
     return verification.map(value -> "APPROVED".equals(value.getStatus())).orElse(false)
         && "ENTRUST_APPROVED".equals(passportStatus);
