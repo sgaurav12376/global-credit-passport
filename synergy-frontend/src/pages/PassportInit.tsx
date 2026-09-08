@@ -89,6 +89,13 @@ export default function PassportInit() {
   const init = useMemo(() => loadInit(), []);
   const readOnly = mode === "view";
 
+  function identityDetailsChanged() {
+    setEntrustVerification(null);
+    setEntrustStarted(false);
+    setEntrustCompleted(false);
+    setSaveMessage(null);
+  }
+
   // Guard: require logged-in session
   useEffect(() => {
     getAccessToken()
@@ -543,7 +550,10 @@ export default function PassportInit() {
                 className="input"
                 disabled={readOnly}
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  identityDetailsChanged();
+                }}
                 placeholder="Your legal name"
               />
 
@@ -553,7 +563,10 @@ export default function PassportInit() {
                 disabled={readOnly}
                 type="date"
                 value={dob}
-                onChange={(e) => setDob(e.target.value)}
+                onChange={(e) => {
+                  setDob(e.target.value);
+                  identityDetailsChanged();
+                }}
               />
 
               <div className="label">Country of Residence</div>
@@ -561,7 +574,10 @@ export default function PassportInit() {
                 className="input"
                 disabled={readOnly}
                 value={residenceCountry}
-                onChange={(e) => setResidenceCountry(e.target.value)}
+                onChange={(e) => {
+                  setResidenceCountry(e.target.value);
+                  identityDetailsChanged();
+                }}
               >
                 <option value="">Select country</option>
                 <option value="IN">India</option>

@@ -6,7 +6,7 @@ const API_BASE =
 export type EntrustVerification = {
   verificationId: string;
   workflowRunId: string;
-  status: "AWAITING_INPUT" | "PROCESSING" | "APPROVED" | "DECLINED" | "ERROR" | "ABANDONED";
+  status: "AWAITING_INPUT" | "PROCESSING" | "APPROVED" | "DECLINED" | "ERROR" | "ABANDONED" | "SUPERSEDED";
   captureUrl?: string | null;
   providerError?: string | null;
   startedAt: string;

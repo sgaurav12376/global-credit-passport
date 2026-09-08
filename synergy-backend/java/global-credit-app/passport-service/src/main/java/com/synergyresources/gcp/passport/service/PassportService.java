@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 import java.util.List;
 import java.util.Objects;
+import java.time.Instant;
 
 @Service
 public class PassportService {
@@ -158,8 +159,8 @@ public class PassportService {
       throw new IllegalStateException("Published passports cannot be edited. Start an update first.");
     }
     boolean identityChanged = !sameIdentityName(
-        passport.getIdentityVerifiedName(), request.fullName
-    ) || !Objects.equals(passport.getIdentityVerifiedDob(), request.dob)
+        passport.getFullName(), request.fullName
+    ) || !Objects.equals(passport.getDob(), request.dob)
         || (request.residenceCountry != null
             && !request.residenceCountry.isBlank()
             && !Objects.equals(passport.getResidenceCountry(), request.residenceCountry));
@@ -175,18 +176,21 @@ public class PassportService {
     if (request.currentSection != null && !request.currentSection.isBlank()) {
       passport.setCurrentSection(validSection(request.currentSection));
     }
-    if (identityChanged && identityWasCompleted(passport.getIdentityStatus())) {
-      passport.setIdentityStatus("REQUIRES_REVERIFICATION");
-      passport.setIdentityCompletedAt(null);
-      passport.setIdentityVerifiedName(null);
-      passport.setIdentityVerifiedDob(null);
+    if (identityChanged) {
+      entrustVerificationRepo
+          .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(userId, passportId)
+          .ifPresent(verification -> {
+            verification.setStatus("SUPERSEDED");
+            verification.setCompletedAt(Instant.now());
+            entrustVerificationRepo.save(verification);
+            passport.setIdentityStatus("REQUIRES_REVERIFICATION");
+            passport.setIdentityCompletedAt(null);
+            passport.setIdentityVerifiedName(null);
+            passport.setIdentityVerifiedDob(null);
+          });
     }
     passportRepo.saveAndFlush(passport);
     return view(userId, passport);
-  }
-
-  private boolean identityWasCompleted(String status) {
-    return "ENTRUST_APPROVED".equals(status) || "PILOT_COMPLETED".equals(status);
   }
 
   private boolean sameIdentityName(String verified, String current) {

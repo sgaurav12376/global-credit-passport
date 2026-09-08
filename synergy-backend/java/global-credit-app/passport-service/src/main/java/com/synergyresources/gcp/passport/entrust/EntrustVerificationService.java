@@ -150,7 +150,8 @@ public class EntrustVerificationService {
 
   private boolean terminal(String status) {
     return "APPROVED".equals(status) || "DECLINED".equals(status)
-        || "ERROR".equals(status) || "ABANDONED".equals(status);
+        || "ERROR".equals(status) || "ABANDONED".equals(status)
+        || "SUPERSEDED".equals(status);
   }
 
   private VerificationResponse response(EntrustVerification value) {
