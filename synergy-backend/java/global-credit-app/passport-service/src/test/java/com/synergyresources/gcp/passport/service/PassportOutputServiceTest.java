@@ -30,7 +30,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class PassportOutputServiceTest {
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
   @Test
   void combinesPlaidSurepassAndNonBlockingSandboxIdentityEvidence() {
