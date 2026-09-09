@@ -20,6 +20,7 @@ import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
 import com.synergyresources.gcp.passport.normalization.EvidenceCoverage;
 import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
+import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliationService;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
@@ -40,6 +41,7 @@ class PassportOutputServiceTest {
     SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
     EntrustVerificationRepo entrustRepo = mock(EntrustVerificationRepo.class);
     NormalizedEvidenceSyncService evidenceSync = mock(NormalizedEvidenceSyncService.class);
+    CreditBureauReconciliationService reconciliation = new CreditBureauReconciliationService();
     Passport passport = passport(passportId);
     PlaidFinancialSnapshot plaid = mock(PlaidFinancialSnapshot.class);
     SurepassCreditReport surepass = mock(SurepassCreditReport.class);
@@ -79,7 +81,7 @@ class PassportOutputServiceTest {
     when(outputRepo.saveAndFlush(any(PassportOutput.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     PassportOutput output = new PassportOutputService(
-        outputRepo, plaidRepo, surepassRepo, entrustRepo, evidenceSync, mapper
+        outputRepo, plaidRepo, surepassRepo, entrustRepo, evidenceSync, reconciliation, mapper
     ).create(borrowerId, passport, true);
 
     ObjectNode document = (ObjectNode) output.getDocument();
@@ -93,6 +95,8 @@ class PassportOutputServiceTest {
     assertEquals(24, document.path("verifiedSources").path("openBanking")
         .path("summary").path("analyzedTransactions").asInt());
     assertEquals(71, document.path("evidenceCoverage").path("coveragePercent").asInt());
+    assertEquals("GCP_CREDIT_RECONCILIATION_V1",
+        document.path("creditReconciliation").path("schemaVersion").asText());
     assertNotNull(output.getDocument());
   }
 

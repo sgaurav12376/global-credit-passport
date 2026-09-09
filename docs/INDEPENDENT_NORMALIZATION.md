@@ -64,5 +64,16 @@ is idempotent by source reference and schema version. The output exposes both `e
 and the versioned `normalizedEvidence` datasets. A sandbox identity decline remains recorded but
 does not become an Entrust approval requirement for pilot generation.
 
-The next increment is cross-bureau account reconciliation followed by separate risk-dimension and
-confidence calculations.
+## Bureau reconciliation and borrower display
+
+`CreditBureauReconciliationService` preserves every native bureau score and its native range. It
+compares overlapping bureau summary metrics as minimum/maximum ranges and explicitly flags
+disagreements. It does not average bureau scores, and it does not attempt to join accounts using
+masked identifiers because that could create false matches.
+
+The borrower dashboard displays evidence coverage, domain completeness, native bureau scores, and
+an accurate identity status. A declined sandbox result is described as recorded and non-blocking,
+not as successfully verified.
+
+The next increment is separate risk-dimension and confidence calculations using the reconciled,
+versioned evidence.

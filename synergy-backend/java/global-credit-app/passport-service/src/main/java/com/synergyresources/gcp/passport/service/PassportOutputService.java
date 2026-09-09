@@ -9,6 +9,7 @@ import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
+import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliationService;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
@@ -27,6 +28,7 @@ public class PassportOutputService {
   private final SurepassCreditReportRepo surepassReportRepo;
   private final EntrustVerificationRepo entrustVerificationRepo;
   private final NormalizedEvidenceSyncService evidenceSyncService;
+  private final CreditBureauReconciliationService reconciliationService;
   private final ObjectMapper objectMapper;
 
   public PassportOutputService(
@@ -35,6 +37,7 @@ public class PassportOutputService {
       SurepassCreditReportRepo surepassReportRepo,
       EntrustVerificationRepo entrustVerificationRepo,
       NormalizedEvidenceSyncService evidenceSyncService,
+      CreditBureauReconciliationService reconciliationService,
       ObjectMapper objectMapper
   ) {
     this.outputRepo = outputRepo;
@@ -42,6 +45,7 @@ public class PassportOutputService {
     this.surepassReportRepo = surepassReportRepo;
     this.entrustVerificationRepo = entrustVerificationRepo;
     this.evidenceSyncService = evidenceSyncService;
+    this.reconciliationService = reconciliationService;
     this.objectMapper = objectMapper;
   }
 
@@ -131,6 +135,9 @@ public class PassportOutputService {
     coverage.put("sourceCount", (plaid == null ? 0 : 1) + (surepass == null ? 0 : 1));
 
     document.set("evidenceCoverage", objectMapper.valueToTree(normalized.coverage()));
+    document.set("creditReconciliation", objectMapper.valueToTree(
+        reconciliationService.reconcile(normalized.evidence())
+    ));
     var normalizedEvidence = document.putArray("normalizedEvidence");
     normalized.evidence().forEach(item -> {
       ObjectNode node = normalizedEvidence.addObject();

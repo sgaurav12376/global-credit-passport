@@ -14,6 +14,15 @@ function uiStatus(status?: string) {
   return status === "ACTIVE" ? "Ready" : status === "IN_PROGRESS" || status === "DRAFT" ? "In progress" : "Not started";
 }
 
+function identityLabel(status?: string | null, sandbox = true) {
+  const normalized = (status || "").replace("ENTRUST_", "");
+  if (normalized === "APPROVED") return "Verified";
+  if (normalized === "DECLINED") return sandbox ? "Sandbox result recorded" : "Verification declined";
+  if (normalized === "PROCESSING" || normalized === "AWAITING_INPUT") return "Verification in progress";
+  if (normalized === "ERROR" || normalized === "ABANDONED") return "Verification incomplete";
+  return "Profile provided";
+}
+
 function stepForSection(section?: string | null): 1 | 2 | 3 | 4 {
   if (section === "IDENTITY") return 2;
   if (section === "FINANCIAL") return 3;
@@ -68,7 +77,7 @@ export default function Dashboard() {
       <section className="greeting"><span className="eyebrow">YOUR PASSPORT</span><h1>Welcome back{active.fullName ? `, ${active.fullName.split(" ")[0]}` : ""}</h1><p>Everything important is summarized below.</p></section>
       <section className="simple-card passport-summary-card">
         <div className="summary-heading"><div><span className="status-pill light">✓ {uiStatus(active.status)}</span><h2>{active.originCountry} <span>→</span> {active.destCountry}</h2><p>{active.purpose.charAt(0) + active.purpose.slice(1).toLowerCase()} passport</p></div><div className="passport-score"><b>{sourceCount(active)}</b><span>verified data sources</span></div></div>
-        <div className="source-summary-row"><div><span className={active.creditReportConnected ? "dot ready" : "dot"}/><p><b>Credit history</b><small>{active.creditReportConnected ? "Connected" : "Not added"}</small></p></div><div><span className={active.plaidConnected ? "dot ready" : "dot"}/><p><b>Bank information</b><small>{active.plaidConnected ? "Connected" : "Not added"}</small></p></div><div><span className="dot ready"/><p><b>Identity</b><small>Profile completed</small></p></div></div>
+        <div className="source-summary-row"><div><span className={active.creditReportConnected ? "dot ready" : "dot"}/><p><b>Credit history</b><small>{active.creditReportConnected ? "Connected" : "Not added"}</small></p></div><div><span className={active.plaidConnected ? "dot ready" : "dot"}/><p><b>Bank information</b><small>{active.plaidConnected ? "Connected" : "Not added"}</small></p></div><div><span className={active.identityStatus === "ENTRUST_APPROVED" ? "dot ready" : "dot warning"}/><p><b>Identity</b><small>{identityLabel(active.identityStatus)}</small></p></div></div>
         {draft && active.passportId !== draft.passportId ? <>
           <div className="inline-notice">You have an unfinished update. Your current passport remains available.</div>
           <button className="btn primary-action" onClick={() => open(draft, "edit")}>Continue update</button>
@@ -79,8 +88,14 @@ export default function Dashboard() {
         <div className="source-summary-row">
           <div><span className={output.document.coverage.creditBureauAvailable ? "dot ready" : "dot"}/><p><b>Surepass</b><small>{output.document.coverage.creditBureauAvailable ? "Included" : "Not included"}</small></p></div>
           <div><span className={output.document.coverage.openBankingAvailable ? "dot ready" : "dot"}/><p><b>Plaid</b><small>{output.document.coverage.openBankingAvailable ? "Included" : "Not included"}</small></p></div>
-          <div><span className="dot ready"/><p><b>Entrust</b><small>{output.document.identityVerification.status} · sandbox non-blocking</small></p></div>
+          <div><span className={output.document.identityVerification.status === "APPROVED" ? "dot ready" : "dot warning"}/><p><b>Entrust</b><small>{identityLabel(output.document.identityVerification.status, output.document.identityVerification.sandboxSimulation)}{output.document.identityVerification.sandboxSimulation ? " · non-blocking" : ""}</small></p></div>
         </div>
+        {output.document.evidenceCoverage && <div className="evidence-panel">
+          <div className="evidence-title"><div><span className="eyebrow">EVIDENCE COVERAGE</span><h3>{output.document.evidenceCoverage.coveragePercent}% available</h3></div><span className={output.document.evidenceCoverage.sufficientForRiskAssessment ? "status-pill light" : "status-pill evidence-pending"}>{output.document.evidenceCoverage.sufficientForRiskAssessment ? "Sufficient evidence" : "More evidence needed"}</span></div>
+          <div className="coverage-track"><span style={{ width: `${output.document.evidenceCoverage.coveragePercent}%` }}/></div>
+          <div className="coverage-domains">{["IDENTITY", "CREDIT", "CASHFLOW"].map((domain) => { const item = output.document.evidenceCoverage.domains[domain]; return <div key={domain}><b>{domain.charAt(0) + domain.slice(1).toLowerCase()}</b><small>{item?.available ? `${item.evidenceCount} record${item.evidenceCount === 1 ? "" : "s"} · ${item.bestCompletenessPercent}% complete` : "Not available"}</small></div>; })}</div>
+          {output.document.creditReconciliation && output.document.creditReconciliation.bureauCount > 0 && <div className="bureau-comparison"><b>Native bureau scores</b><div>{output.document.creditReconciliation.nativeScores.map((score) => <span key={`${score.provider}-${score.bureau}`}><strong>{score.value ?? "—"}</strong><small>{score.bureau}{score.minimum != null && score.maximum != null ? ` · ${score.minimum}–${score.maximum}` : ""}</small></span>)}</div>{output.document.creditReconciliation.bureauCount > 1 && <p>Scores are preserved in their native bureau models and are not averaged.</p>}</div>}
+        </div>}
       </section>}
       <details className="history-disclosure"><summary>Activity and passport history</summary><div className="version-list">{history.filter((item) => item.status !== "CANCELLED").map((item) => <button key={item.passportId} onClick={() => open(item, "view")}><span><b>{item.originCountry} → {item.destCountry}</b><small>{new Date(item.updatedAt).toLocaleString()}</small></span><em>{uiStatus(item.status)}</em></button>)}</div></details>
     </>}

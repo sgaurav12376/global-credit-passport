@@ -82,6 +82,45 @@ export type PassportOutput = {
       openBankingAvailable: boolean;
       creditBureauAvailable: boolean;
     };
+    evidenceCoverage?: {
+      schemaVersion: string;
+      coveragePercent: number;
+      evidenceCount: number;
+      providerCount: number;
+      domains: Record<string, {
+        available: boolean;
+        evidenceCount: number;
+        bestCompletenessPercent: number;
+        weightedContribution: number;
+      }>;
+      missingDomains: string[];
+      sufficientForRiskAssessment: boolean;
+    };
+    normalizedEvidence?: Array<{
+      evidenceId?: string;
+      domain: string;
+      countryCode: string;
+      provider: string;
+      sourceSystem: string;
+      schemaVersion: string;
+      completenessPercent: number;
+      dataset: Record<string, unknown>;
+    }>;
+    creditReconciliation?: {
+      schemaVersion: string;
+      bureauCount: number;
+      nativeScores: Array<{
+        countryCode: string;
+        provider: string;
+        bureau: string;
+        value: number | null;
+        minimum: number | null;
+        maximum: number | null;
+        model: string | null;
+        completenessPercent: number;
+      }>;
+      warnings: string[];
+    };
   };
 };
 

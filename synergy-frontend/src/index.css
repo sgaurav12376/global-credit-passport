@@ -256,6 +256,21 @@ html,body,#root{ height:100%; margin:0; }
 .source-summary-row>div{ display:flex; align-items:center; gap:9px; padding:11px; background:#f8fafc; border-radius:11px; }
 .source-summary-row p{ display:grid; margin:0; gap:2px; font-size:12px; }.source-summary-row small{ color:var(--muted); }
 .dot{ width:9px; height:9px; border-radius:50%; background:#cbd5e1; flex:none; }.dot.ready{ background:#21a366; }
+.dot.warning{ background:#d08700; }
+.evidence-panel{ margin-top:20px; padding-top:20px; border-top:1px solid var(--border); }
+.evidence-title{ display:flex; justify-content:space-between; align-items:center; gap:18px; }
+.evidence-title h3{ margin:5px 0 0; font-size:22px; }
+.status-pill.evidence-pending{ color:#7a4d00; background:#fff4cf; }
+.coverage-track{ height:9px; margin:15px 0; overflow:hidden; border-radius:999px; background:#e7edf3; }
+.coverage-track span{ display:block; height:100%; border-radius:inherit; background:var(--primary); }
+.coverage-domains{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.coverage-domains>div{ display:grid; gap:3px; padding:11px; border:1px solid var(--border); border-radius:10px; }
+.coverage-domains b{ font-size:12px; }.coverage-domains small{ color:var(--muted); font-size:11px; }
+.bureau-comparison{ margin-top:18px; }.bureau-comparison>b{ font-size:13px; }
+.bureau-comparison>div{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.bureau-comparison span{ display:grid; min-width:110px; padding:10px 12px; border-radius:10px; background:#f8fafc; }
+.bureau-comparison strong{ color:var(--primary); font-size:20px; }.bureau-comparison small,.bureau-comparison p{ color:var(--muted); font-size:11px; }
+.bureau-comparison p{ margin:8px 0 0; }
 .primary-action{ max-width:280px; display:block; margin:12px auto 0; }
 .next-step-card{ display:flex; align-items:center; justify-content:space-between; gap:25px; margin-top:14px; padding:20px 24px; }
 .next-step-card h3{ margin:5px 0 0; }.next-step-card p{ margin:5px 0 0; }
@@ -284,6 +299,7 @@ html,body,#root{ height:100%; margin:0; }
   .summary-heading,.next-step-card{ align-items:stretch; flex-direction:column; }
   .summary-heading{ display:flex; }.passport-score{ text-align:left; max-width:none; }
   .source-summary-row{ grid-template-columns:1fr; }
+  .evidence-title{ align-items:flex-start; flex-direction:column; }.coverage-domains{ grid-template-columns:1fr; }
   .action-card{ grid-template-columns:auto 1fr; }.action-card .btn{ grid-column:1/-1; width:100%; }
   .journey-intro{ display:grid; gap:4px; }
   .workspace-stepper{ grid-template-columns:1fr; }
