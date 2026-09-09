@@ -58,5 +58,11 @@ risk score and confidence calculation.
 
 ## Next increment
 
-Connect normalization persistence to each successful collection flow, reconcile duplicate bureau
-accounts, and expose coverage in the unified passport before implementing risk weights.
+When unified output is generated, `NormalizedEvidenceSyncService` synchronizes every successful
+bureau report plus the latest cash-flow snapshot and identity-verification result. Synchronization
+is idempotent by source reference and schema version. The output exposes both `evidenceCoverage`
+and the versioned `normalizedEvidence` datasets. A sandbox identity decline remains recorded but
+does not become an Entrust approval requirement for pilot generation.
+
+The next increment is cross-bureau account reconciliation followed by separate risk-dimension and
+confidence calculations.

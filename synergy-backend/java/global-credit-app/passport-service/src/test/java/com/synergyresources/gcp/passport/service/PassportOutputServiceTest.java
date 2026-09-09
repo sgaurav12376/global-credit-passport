@@ -18,6 +18,10 @@ import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
+import com.synergyresources.gcp.passport.normalization.EvidenceCoverage;
+import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
+import java.util.List;
+import java.util.Map;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -35,6 +39,7 @@ class PassportOutputServiceTest {
     PlaidFinancialSnapshotRepo plaidRepo = mock(PlaidFinancialSnapshotRepo.class);
     SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
     EntrustVerificationRepo entrustRepo = mock(EntrustVerificationRepo.class);
+    NormalizedEvidenceSyncService evidenceSync = mock(NormalizedEvidenceSyncService.class);
     Passport passport = passport(passportId);
     PlaidFinancialSnapshot plaid = mock(PlaidFinancialSnapshot.class);
     SurepassCreditReport surepass = mock(SurepassCreditReport.class);
@@ -59,15 +64,22 @@ class PassportOutputServiceTest {
     when(entrust.getStartedAt()).thenReturn(Instant.parse("2026-09-08T11:58:00Z"));
     when(plaidRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
         .thenReturn(Optional.of(plaid));
-    when(surepassRepo.findFirstByBorrowerIdAndPassportIdAndStatusOrderByCreatedAtDesc(
-        borrowerId, passportId, "SUCCESS"))
-        .thenReturn(Optional.of(surepass));
+    when(surepass.getStatus()).thenReturn("SUCCESS");
+    when(surepassRepo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
+        .thenReturn(List.of(surepass));
     when(entrustRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
         borrowerId, passportId)).thenReturn(Optional.of(entrust));
+    when(evidenceSync.synchronize(borrowerId, passport, plaid, List.of(surepass), entrust))
+        .thenReturn(new NormalizedEvidenceSyncService.SyncResult(
+            List.of(), new EvidenceCoverage(
+                "GCP_EVIDENCE_COVERAGE_V1", 71, 2, 2, Map.of(),
+                List.of("IDENTITY"), true
+            )
+        ));
     when(outputRepo.saveAndFlush(any(PassportOutput.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     PassportOutput output = new PassportOutputService(
-        outputRepo, plaidRepo, surepassRepo, entrustRepo, mapper
+        outputRepo, plaidRepo, surepassRepo, entrustRepo, evidenceSync, mapper
     ).create(borrowerId, passport, true);
 
     ObjectNode document = (ObjectNode) output.getDocument();
@@ -80,6 +92,7 @@ class PassportOutputServiceTest {
         .path("normalizedReport").path("creditScore").asInt());
     assertEquals(24, document.path("verifiedSources").path("openBanking")
         .path("summary").path("analyzedTransactions").asInt());
+    assertEquals(71, document.path("evidenceCoverage").path("coveragePercent").asInt());
     assertNotNull(output.getDocument());
   }
 

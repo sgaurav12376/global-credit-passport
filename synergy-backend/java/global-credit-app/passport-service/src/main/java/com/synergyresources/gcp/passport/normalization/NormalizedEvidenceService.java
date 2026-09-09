@@ -62,6 +62,13 @@ public class NormalizedEvidenceService {
       UUID borrowerId, UUID passportId, String domain, String schemaVersion,
       GcpNormalized.Provenance provenance, GcpNormalized.DataQuality quality, Object dataset
   ) {
+    var existing = repo
+        .findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersion(
+            passportId, domain, provenance.provider(), provenance.sourceSystem(),
+            provenance.providerReference(), schemaVersion
+        );
+    if (existing.isPresent()) return existing.get();
+
     NormalizedEvidence evidence = new NormalizedEvidence();
     evidence.setBorrowerId(borrowerId);
     evidence.setPassportId(passportId);

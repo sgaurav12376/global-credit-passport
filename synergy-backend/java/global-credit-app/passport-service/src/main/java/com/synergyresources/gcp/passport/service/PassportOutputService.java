@@ -8,11 +8,13 @@ import com.synergyresources.gcp.passport.model.PassportOutput;
 import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
+import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,7 @@ public class PassportOutputService {
   private final PlaidFinancialSnapshotRepo plaidSnapshotRepo;
   private final SurepassCreditReportRepo surepassReportRepo;
   private final EntrustVerificationRepo entrustVerificationRepo;
+  private final NormalizedEvidenceSyncService evidenceSyncService;
   private final ObjectMapper objectMapper;
 
   public PassportOutputService(
@@ -31,12 +34,14 @@ public class PassportOutputService {
       PlaidFinancialSnapshotRepo plaidSnapshotRepo,
       SurepassCreditReportRepo surepassReportRepo,
       EntrustVerificationRepo entrustVerificationRepo,
+      NormalizedEvidenceSyncService evidenceSyncService,
       ObjectMapper objectMapper
   ) {
     this.outputRepo = outputRepo;
     this.plaidSnapshotRepo = plaidSnapshotRepo;
     this.surepassReportRepo = surepassReportRepo;
     this.entrustVerificationRepo = entrustVerificationRepo;
+    this.evidenceSyncService = evidenceSyncService;
     this.objectMapper = objectMapper;
   }
 
@@ -44,16 +49,18 @@ public class PassportOutputService {
     PlaidFinancialSnapshot plaid = plaidSnapshotRepo
         .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passport.getId())
         .orElse(null);
-    SurepassCreditReport surepass = surepassReportRepo
-        .findFirstByBorrowerIdAndPassportIdAndStatusOrderByCreatedAtDesc(
-            borrowerId, passport.getId(), "SUCCESS"
-        )
-        .orElse(null);
+    List<SurepassCreditReport> surepassReports = surepassReportRepo
+        .findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passport.getId())
+        .stream().filter(report -> "SUCCESS".equals(report.getStatus())).toList();
+    SurepassCreditReport surepass = surepassReports.isEmpty() ? null : surepassReports.get(0);
     EntrustVerification entrust = entrustVerificationRepo
         .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
             borrowerId, passport.getId()
         )
         .orElse(null);
+    var normalized = evidenceSyncService.synchronize(
+        borrowerId, passport, plaid, surepassReports, entrust
+    );
 
     ObjectNode document = objectMapper.createObjectNode();
     document.put("schemaVersion", SCHEMA_VERSION);
@@ -122,6 +129,20 @@ public class PassportOutputService {
     coverage.put("openBankingAvailable", plaid != null);
     coverage.put("creditBureauAvailable", surepass != null);
     coverage.put("sourceCount", (plaid == null ? 0 : 1) + (surepass == null ? 0 : 1));
+
+    document.set("evidenceCoverage", objectMapper.valueToTree(normalized.coverage()));
+    var normalizedEvidence = document.putArray("normalizedEvidence");
+    normalized.evidence().forEach(item -> {
+      ObjectNode node = normalizedEvidence.addObject();
+      if (item.getId() != null) node.put("evidenceId", item.getId().toString());
+      node.put("domain", item.getDomain());
+      node.put("countryCode", item.getCountryCode());
+      node.put("provider", item.getProvider());
+      node.put("sourceSystem", item.getSourceSystem());
+      node.put("schemaVersion", item.getSchemaVersion());
+      node.put("completenessPercent", item.getCompletenessPercent());
+      node.set("dataset", item.getPayload());
+    });
 
     PassportOutput output = new PassportOutput();
     output.setBorrowerId(borrowerId);

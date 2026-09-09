@@ -11,6 +11,7 @@ import com.synergyresources.gcp.passport.repo.NormalizedEvidenceRepo;
 import com.synergyresources.gcp.passport.surepass.NormalizedCreditReport;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +19,9 @@ class NormalizedEvidenceServiceTest {
   @Test
   void persistsNormalizedDatasetWithProvenanceAndQuality() {
     NormalizedEvidenceRepo repo = mock(NormalizedEvidenceRepo.class);
+    when(repo.findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersion(
+        any(), any(), any(), any(), any(), any()
+    )).thenReturn(Optional.empty());
     when(repo.saveAndFlush(any(NormalizedEvidence.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
     NormalizedEvidenceService service = new NormalizedEvidenceService(
