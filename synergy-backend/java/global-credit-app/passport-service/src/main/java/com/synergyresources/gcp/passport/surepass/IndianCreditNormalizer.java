@@ -15,6 +15,58 @@ import org.springframework.stereotype.Component;
 public class IndianCreditNormalizer {
   private static final Pattern CRIF_DPD = Pattern.compile(",([0-9]{3})/");
 
+  public NormalizedCreditReport normalizeEquifax(JsonNode response) {
+    JsonNode data = response.path("data");
+    JsonNode report = data.path("credit_report").path("CCRResponse")
+        .path("CIRReportDataLst").path(0).path("CIRReportData");
+    if (report.isMissingNode() || report.isNull()) {
+      throw new IllegalStateException("Surepass Equifax response did not include a report");
+    }
+    JsonNode summary = report.path("RetailAccountsSummary");
+    JsonNode enquiries = report.path("EnquirySummary");
+    List<NormalizedCreditReport.Tradeline> tradelines = new ArrayList<>();
+    for (JsonNode account : arrayOrSingleton(report.path("RetailAccountDetails"))) {
+      tradelines.add(new NormalizedCreditReport.Tradeline(
+          mask(account.path("AccountNumber").asText(null)),
+          text(account, "AccountType"),
+          text(account, "AccountStatus"),
+          money(account, "Balance"),
+          firstMoney(account, "HighCredit", "CreditLimit"),
+          money(account, "PastDueAmount"),
+          null,
+          null,
+          text(account, "DateOpened"),
+          text(account, "DateReported")
+      ));
+    }
+    List<String> factors = new ArrayList<>();
+    for (JsonNode score : arrayOrSingleton(report.path("ScoreDetails"))) {
+      for (JsonNode element : arrayOrSingleton(score.path("ScoringElements"))) {
+        String description = text(element, "Description");
+        if (description != null && !factors.contains(description)) factors.add(description);
+      }
+    }
+    List<String> warnings = new ArrayList<>();
+    warnings.add("Equifax payment-history DPD was not present in the supplied payload");
+    Integer total = integer(summary, "NoOfAccounts");
+    if (total != null && total != tradelines.size()) {
+      warnings.add("Bureau summary and detailed account counts differ");
+    }
+    return new NormalizedCreditReport(
+        "EQUIFAX", text(data, "client_id"), integer(data, "credit_score"), 300, 900,
+        List.copyOf(factors),
+        new NormalizedCreditReport.Summary(
+            total, integer(summary, "NoOfActiveAccounts"),
+            subtract(total, integer(summary, "NoOfActiveAccounts")),
+            positiveAsCount(money(summary, "TotalPastDue")), null, null,
+            money(summary, "TotalBalanceAmount"), money(summary, "TotalCreditLimit"),
+            null, integer(enquiries, "Past12Months"), null,
+            integer(summary, "NoOfWriteOffs")
+        ),
+        List.copyOf(tradelines), List.copyOf(warnings)
+    );
+  }
+
   public NormalizedCreditReport normalizeCrif(JsonNode response) {
     JsonNode data = response.path("data");
     JsonNode report = data.path("credit_report");
@@ -397,5 +449,9 @@ public class IndianCreditNormalizer {
 
   private Integer subtract(Integer left, Integer right) {
     return left == null || right == null ? null : Math.max(0, left - right);
+  }
+
+  private Integer positiveAsCount(BigDecimal value) {
+    return value == null ? null : value.signum() > 0 ? 1 : 0;
   }
 }
