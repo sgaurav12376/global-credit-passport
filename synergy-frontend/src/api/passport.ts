@@ -121,6 +121,30 @@ export type PassportOutput = {
       }>;
       warnings: string[];
     };
+    riskAssessment?: {
+      schemaVersion: string;
+      modelType: string;
+      modelVersion: string;
+      status: "CALCULATED" | "INSUFFICIENT_EVIDENCE";
+      riskIndex: number | null;
+      riskBand: string;
+      confidence: {
+        score: number;
+        band: "HIGH" | "MEDIUM" | "LOW";
+      };
+      dimensions: Array<{
+        key: string;
+        label: string;
+        available: boolean;
+        score: number | null;
+        configuredWeight: number;
+        band: string;
+        reasonCodes: string[];
+      }>;
+      missingDimensions: string[];
+      disclosures: string[];
+      calculatedAt: string;
+    };
   };
 };
 

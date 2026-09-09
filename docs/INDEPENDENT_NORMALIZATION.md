@@ -75,5 +75,19 @@ The borrower dashboard displays evidence coverage, domain completeness, native b
 an accurate identity status. A declined sandbox result is described as recorded and non-blocking,
 not as successfully verified.
 
-The next increment is separate risk-dimension and confidence calculations using the reconciled,
-versioned evidence.
+## Deterministic risk intelligence
+
+`GCP_RISK_ASSESSMENT_V1` uses versioned `GCP_RULES_V1` rules to calculate six independent
+dimensions: repayment behavior, credit utilization, debt burden, cash-flow capacity, income
+stability, and credit-history depth. Available dimensions are weight-normalized; missing values
+remain unavailable and are never converted to zero.
+
+The 0–100 GCP risk index is behavior-based and does not average or rescale native bureau scores.
+Higher values represent stronger observed repayment capacity. It is pilot risk intelligence, not
+an approval decision.
+
+Confidence is calculated separately from coverage, completeness, freshness, cross-bureau
+consistency, and identity assurance. Consequently, a strong risk index can still carry low or
+medium confidence. Every output records model type/version, reason codes, missing dimensions,
+disclosures, and calculation time. A future statistical or machine-learning model can implement
+the same versioned output contract and operate as a challenger to this deterministic baseline.

@@ -10,6 +10,7 @@ import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
 import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliationService;
+import com.synergyresources.gcp.passport.risk.DeterministicRiskAssessmentService;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
@@ -27,6 +28,7 @@ public class PassportOutputService {
   private final SurepassCreditReportRepo surepassReportRepo;
   private final NormalizedEvidenceSyncService evidenceSyncService;
   private final CreditBureauReconciliationService reconciliationService;
+  private final DeterministicRiskAssessmentService riskAssessmentService;
   private final ObjectMapper objectMapper;
 
   public PassportOutputService(
@@ -35,6 +37,7 @@ public class PassportOutputService {
       SurepassCreditReportRepo surepassReportRepo,
       NormalizedEvidenceSyncService evidenceSyncService,
       CreditBureauReconciliationService reconciliationService,
+      DeterministicRiskAssessmentService riskAssessmentService,
       ObjectMapper objectMapper
   ) {
     this.outputRepo = outputRepo;
@@ -42,6 +45,7 @@ public class PassportOutputService {
     this.surepassReportRepo = surepassReportRepo;
     this.evidenceSyncService = evidenceSyncService;
     this.reconciliationService = reconciliationService;
+    this.riskAssessmentService = riskAssessmentService;
     this.objectMapper = objectMapper;
   }
 
@@ -131,8 +135,12 @@ public class PassportOutputService {
     coverage.put("sourceCount", (plaid == null ? 0 : 1) + (surepass == null ? 0 : 1));
 
     document.set("evidenceCoverage", objectMapper.valueToTree(normalized.coverage()));
-    document.set("creditReconciliation", objectMapper.valueToTree(
-        reconciliationService.reconcile(normalized.evidence())
+    var reconciliation = reconciliationService.reconcile(normalized.evidence());
+    document.set("creditReconciliation", objectMapper.valueToTree(reconciliation));
+    document.set("riskAssessment", objectMapper.valueToTree(
+        riskAssessmentService.assess(
+            normalized.evidence(), normalized.coverage(), reconciliation
+        )
     ));
     var normalizedEvidence = document.putArray("normalizedEvidence");
     normalized.evidence().forEach(item -> {

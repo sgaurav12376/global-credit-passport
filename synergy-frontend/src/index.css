@@ -271,6 +271,16 @@ html,body,#root{ height:100%; margin:0; }
 .bureau-comparison span{ display:grid; min-width:110px; padding:10px 12px; border-radius:10px; background:#f8fafc; }
 .bureau-comparison strong{ color:var(--primary); font-size:20px; }.bureau-comparison small,.bureau-comparison p{ color:var(--muted); font-size:11px; }
 .bureau-comparison p{ margin:8px 0 0; }
+.risk-panel{ margin-top:22px; padding-top:22px; border-top:1px solid var(--border); }
+.risk-head{ display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+.risk-head h3{ margin:6px 0 0; color:var(--primary); font-size:36px; }
+.risk-head h3 small{ margin-left:5px; color:var(--muted); font-size:12px; font-weight:600; }
+.risk-head p{ margin:1px 0 0; color:var(--muted); font-size:12px; text-transform:capitalize; }
+.confidence-score{ display:grid; text-align:right; }.confidence-score b{ font-size:26px; color:#18794e; }.confidence-score span{ color:var(--muted); font-size:11px; text-transform:capitalize; }
+.risk-dimensions{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:16px; }
+.risk-dimensions>div{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--border); border-radius:10px; }
+.risk-dimensions span{ display:grid; gap:2px; }.risk-dimensions b{ font-size:12px; }.risk-dimensions small{ color:var(--muted); font-size:10px; text-transform:capitalize; }.risk-dimensions strong{ color:var(--primary); font-size:20px; }
+.risk-disclosure{ margin:12px 0 0; color:var(--muted); font-size:10px; }
 .primary-action{ max-width:280px; display:block; margin:12px auto 0; }
 .next-step-card{ display:flex; align-items:center; justify-content:space-between; gap:25px; margin-top:14px; padding:20px 24px; }
 .next-step-card h3{ margin:5px 0 0; }.next-step-card p{ margin:5px 0 0; }
@@ -300,6 +310,7 @@ html,body,#root{ height:100%; margin:0; }
   .summary-heading{ display:flex; }.passport-score{ text-align:left; max-width:none; }
   .source-summary-row{ grid-template-columns:1fr; }
   .evidence-title{ align-items:flex-start; flex-direction:column; }.coverage-domains{ grid-template-columns:1fr; }
+  .risk-head{ flex-direction:column; }.confidence-score{ text-align:left; }.risk-dimensions{ grid-template-columns:1fr; }
   .action-card{ grid-template-columns:auto 1fr; }.action-card .btn{ grid-column:1/-1; width:100%; }
   .journey-intro{ display:grid; gap:4px; }
   .workspace-stepper{ grid-template-columns:1fr; }

@@ -20,6 +20,7 @@ import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
 import com.synergyresources.gcp.passport.normalization.EvidenceCoverage;
 import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
 import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliationService;
+import com.synergyresources.gcp.passport.risk.DeterministicRiskAssessmentService;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
@@ -40,6 +41,7 @@ class PassportOutputServiceTest {
     SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
     NormalizedEvidenceSyncService evidenceSync = mock(NormalizedEvidenceSyncService.class);
     CreditBureauReconciliationService reconciliation = new CreditBureauReconciliationService();
+    DeterministicRiskAssessmentService riskAssessment = new DeterministicRiskAssessmentService();
     Passport passport = passport(passportId);
     PlaidFinancialSnapshot plaid = mock(PlaidFinancialSnapshot.class);
     SurepassCreditReport surepass = mock(SurepassCreditReport.class);
@@ -77,7 +79,7 @@ class PassportOutputServiceTest {
     when(outputRepo.saveAndFlush(any(PassportOutput.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     PassportOutput output = new PassportOutputService(
-        outputRepo, plaidRepo, surepassRepo, evidenceSync, reconciliation, mapper
+        outputRepo, plaidRepo, surepassRepo, evidenceSync, reconciliation, riskAssessment, mapper
     ).create(borrowerId, passport, true, entrust);
 
     ObjectNode document = (ObjectNode) output.getDocument();
@@ -93,6 +95,8 @@ class PassportOutputServiceTest {
     assertEquals(71, document.path("evidenceCoverage").path("coveragePercent").asInt());
     assertEquals("GCP_CREDIT_RECONCILIATION_V1",
         document.path("creditReconciliation").path("schemaVersion").asText());
+    assertEquals("GCP_RISK_ASSESSMENT_V1",
+        document.path("riskAssessment").path("schemaVersion").asText());
     assertNotNull(output.getDocument());
   }
 
