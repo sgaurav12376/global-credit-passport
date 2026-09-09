@@ -38,7 +38,25 @@ document hash when available, adapter ID/version, completeness and warnings.
 The multi-bureau Surepass normalizer accepts partial success: each successful bureau is
 returned independently, and an unavailable bureau is skipped without discarding the others.
 
+## Persistence and evidence coverage
+
+Normalized datasets are stored append-only in `normalized_evidence`. Each row retains its domain,
+country, provider, source system, schema and adapter versions, retrieval time, completeness, and
+the complete normalized JSON payload. Multiple bureaus and repeated collections remain separate
+evidence records for audit and later reconciliation.
+
+`EvidenceCoverageCalculator` evaluates the best available quality in each independent domain:
+
+- identity: 20%
+- credit: 45%
+- cash flow: 35%
+
+Multiple providers improve evidence breadth but do not double-count a domain's weight. Identity
+alone never qualifies as risk evidence. The initial minimum for a risk assessment is 35% coverage
+with at least one credit or cash-flow dataset. This eligibility rule is separate from the future
+risk score and confidence calculation.
+
 ## Next increment
 
-Persist normalized datasets independently, reconcile duplicate bureau accounts, calculate
-evidence coverage, and define the minimum-evidence policy before implementing risk weights.
+Connect normalization persistence to each successful collection flow, reconcile duplicate bureau
+accounts, and expose coverage in the unified passport before implementing risk weights.
