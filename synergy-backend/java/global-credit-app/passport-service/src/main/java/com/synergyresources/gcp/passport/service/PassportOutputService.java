@@ -10,7 +10,6 @@ import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.normalization.NormalizedEvidenceSyncService;
 import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliationService;
-import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
@@ -26,7 +25,6 @@ public class PassportOutputService {
   private final PassportOutputRepo outputRepo;
   private final PlaidFinancialSnapshotRepo plaidSnapshotRepo;
   private final SurepassCreditReportRepo surepassReportRepo;
-  private final EntrustVerificationRepo entrustVerificationRepo;
   private final NormalizedEvidenceSyncService evidenceSyncService;
   private final CreditBureauReconciliationService reconciliationService;
   private final ObjectMapper objectMapper;
@@ -35,7 +33,6 @@ public class PassportOutputService {
       PassportOutputRepo outputRepo,
       PlaidFinancialSnapshotRepo plaidSnapshotRepo,
       SurepassCreditReportRepo surepassReportRepo,
-      EntrustVerificationRepo entrustVerificationRepo,
       NormalizedEvidenceSyncService evidenceSyncService,
       CreditBureauReconciliationService reconciliationService,
       ObjectMapper objectMapper
@@ -43,13 +40,17 @@ public class PassportOutputService {
     this.outputRepo = outputRepo;
     this.plaidSnapshotRepo = plaidSnapshotRepo;
     this.surepassReportRepo = surepassReportRepo;
-    this.entrustVerificationRepo = entrustVerificationRepo;
     this.evidenceSyncService = evidenceSyncService;
     this.reconciliationService = reconciliationService;
     this.objectMapper = objectMapper;
   }
 
-  public PassportOutput create(UUID borrowerId, Passport passport, boolean sandboxIdentityPolicy) {
+  public PassportOutput create(
+      UUID borrowerId,
+      Passport passport,
+      boolean sandboxIdentityPolicy,
+      EntrustVerification entrust
+  ) {
     PlaidFinancialSnapshot plaid = plaidSnapshotRepo
         .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passport.getId())
         .orElse(null);
@@ -57,11 +58,6 @@ public class PassportOutputService {
         .findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passport.getId())
         .stream().filter(report -> "SUCCESS".equals(report.getStatus())).toList();
     SurepassCreditReport surepass = surepassReports.isEmpty() ? null : surepassReports.get(0);
-    EntrustVerification entrust = entrustVerificationRepo
-        .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
-            borrowerId, passport.getId()
-        )
-        .orElse(null);
     var normalized = evidenceSyncService.synchronize(
         borrowerId, passport, plaid, surepassReports, entrust
     );

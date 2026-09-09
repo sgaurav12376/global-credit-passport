@@ -5,6 +5,7 @@ import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PassportPlaidConnection;
 import com.synergyresources.gcp.passport.model.PassportSource;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
+import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import java.util.List;
 import java.util.Objects;
 import java.time.Instant;
+import java.util.Optional;
 
 @Service
 public class PassportService {
@@ -183,11 +185,11 @@ public class PassportService {
             verification.setStatus("SUPERSEDED");
             verification.setCompletedAt(Instant.now());
             entrustVerificationRepo.save(verification);
-            passport.setIdentityStatus("REQUIRES_REVERIFICATION");
-            passport.setIdentityCompletedAt(null);
-            passport.setIdentityVerifiedName(null);
-            passport.setIdentityVerifiedDob(null);
           });
+      passport.setIdentityStatus("REQUIRES_REVERIFICATION");
+      passport.setIdentityCompletedAt(null);
+      passport.setIdentityVerifiedName(null);
+      passport.setIdentityVerifiedDob(null);
     }
     passportRepo.saveAndFlush(passport);
     return view(userId, passport);
@@ -296,7 +298,9 @@ public class PassportService {
           "Connect at least one successful data source to this passport before generating it"
       );
     }
-    if (!identityCanPublish(userId, passportId, p.getIdentityStatus())) {
+    Optional<EntrustVerification> entrust =
+        effectiveVerification(userId, p);
+    if (!identityCanPublish(entrust, p.getIdentityStatus())) {
       throw new IllegalStateException(
           sandboxIdentityPolicy
               ? "Record the Entrust sandbox submission before publishing this passport"
@@ -305,16 +309,19 @@ public class PassportService {
     }
 
     plaidSnapshotService.createIfPlaidConnected(userId, passportId);
-    var output = passportOutputService.create(userId, p, sandboxIdentityPolicy);
+    var output = passportOutputService.create(
+        userId, p, sandboxIdentityPolicy, entrust.orElse(null)
+    );
     p.setCurrentSection("OVERVIEW");
     p.setStatus("ACTIVE");
     passportRepo.save(p);
     return PassportOutputService.View.from(output);
   }
 
-  private boolean identityCanPublish(UUID userId, UUID passportId, String passportStatus) {
-    var verification = entrustVerificationRepo
-        .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(userId, passportId);
+  private boolean identityCanPublish(
+      Optional<EntrustVerification> verification,
+      String passportStatus
+  ) {
     if (sandboxIdentityPolicy) {
       return verification
           .map(value -> "APPROVED".equals(value.getStatus())
@@ -323,6 +330,27 @@ public class PassportService {
     }
     return verification.map(value -> "APPROVED".equals(value.getStatus())).orElse(false)
         && "ENTRUST_APPROVED".equals(passportStatus);
+  }
+
+  private Optional<EntrustVerification> effectiveVerification(UUID userId, Passport passport) {
+    return effectiveVerification(userId, passport, 0);
+  }
+
+  private Optional<EntrustVerification> effectiveVerification(
+      UUID userId, Passport passport, int depth
+  ) {
+    var current = entrustVerificationRepo
+        .findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(userId, passport.getId());
+    if (current.isPresent()) return current;
+    if (depth >= 10 || passport.getSupersedesPassportId() == null
+        || "REQUIRES_REVERIFICATION".equals(passport.getIdentityStatus())) {
+      return Optional.empty();
+    }
+    return passportRepo.findByIdAndUserId(passport.getSupersedesPassportId(), userId)
+        .filter(parent -> sameIdentityName(parent.getFullName(), passport.getFullName()))
+        .filter(parent -> Objects.equals(parent.getDob(), passport.getDob()))
+        .filter(parent -> Objects.equals(parent.getResidenceCountry(), passport.getResidenceCountry()))
+        .flatMap(parent -> effectiveVerification(userId, parent, depth + 1));
   }
 
   @Transactional(readOnly = true)

@@ -14,7 +14,6 @@ import com.synergyresources.gcp.passport.model.PassportOutput;
 import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
-import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PlaidFinancialSnapshotRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
@@ -39,7 +38,6 @@ class PassportOutputServiceTest {
     PassportOutputRepo outputRepo = mock(PassportOutputRepo.class);
     PlaidFinancialSnapshotRepo plaidRepo = mock(PlaidFinancialSnapshotRepo.class);
     SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
-    EntrustVerificationRepo entrustRepo = mock(EntrustVerificationRepo.class);
     NormalizedEvidenceSyncService evidenceSync = mock(NormalizedEvidenceSyncService.class);
     CreditBureauReconciliationService reconciliation = new CreditBureauReconciliationService();
     Passport passport = passport(passportId);
@@ -69,8 +67,6 @@ class PassportOutputServiceTest {
     when(surepass.getStatus()).thenReturn("SUCCESS");
     when(surepassRepo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
         .thenReturn(List.of(surepass));
-    when(entrustRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
-        borrowerId, passportId)).thenReturn(Optional.of(entrust));
     when(evidenceSync.synchronize(borrowerId, passport, plaid, List.of(surepass), entrust))
         .thenReturn(new NormalizedEvidenceSyncService.SyncResult(
             List.of(), new EvidenceCoverage(
@@ -81,8 +77,8 @@ class PassportOutputServiceTest {
     when(outputRepo.saveAndFlush(any(PassportOutput.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     PassportOutput output = new PassportOutputService(
-        outputRepo, plaidRepo, surepassRepo, entrustRepo, evidenceSync, reconciliation, mapper
-    ).create(borrowerId, passport, true);
+        outputRepo, plaidRepo, surepassRepo, evidenceSync, reconciliation, mapper
+    ).create(borrowerId, passport, true, entrust);
 
     ObjectNode document = (ObjectNode) output.getDocument();
     assertEquals("GCP_PILOT_V1", document.path("schemaVersion").asText());

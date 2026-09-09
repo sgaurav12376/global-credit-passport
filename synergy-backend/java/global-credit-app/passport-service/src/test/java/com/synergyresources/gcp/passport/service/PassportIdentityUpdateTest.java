@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.synergyresources.gcp.passport.api.Dto;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.model.Passport;
+import com.synergyresources.gcp.passport.model.PassportOutput;
 import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
@@ -71,5 +72,54 @@ class PassportIdentityUpdateTest {
     assertEquals("REQUIRES_REVERIFICATION", passport.getIdentityStatus());
     assertNull(passport.getIdentityCompletedAt());
     verify(entrustRepo).save(verification);
+  }
+
+  @Test
+  void unchangedUpdateDraftCanPublishWithInheritedSandboxVerification() {
+    UUID borrowerId = UUID.randomUUID();
+    UUID draftId = UUID.randomUUID();
+    UUID parentId = UUID.randomUUID();
+    PassportRepo passportRepo = mock(PassportRepo.class);
+    PassportPlaidConnectionRepo plaidConnectionRepo = mock(PassportPlaidConnectionRepo.class);
+    SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
+    EntrustVerificationRepo entrustRepo = mock(EntrustVerificationRepo.class);
+    PlaidFinancialSnapshotService snapshotService = mock(PlaidFinancialSnapshotService.class);
+    PassportOutputService outputService = mock(PassportOutputService.class);
+    Passport draft = passport(draftId, parentId);
+    Passport parent = passport(parentId, null);
+    EntrustVerification verification = new EntrustVerification();
+    verification.setStatus("DECLINED");
+
+    when(passportRepo.findByIdAndUserId(draftId, borrowerId)).thenReturn(Optional.of(draft));
+    when(passportRepo.findByIdAndUserId(parentId, borrowerId)).thenReturn(Optional.of(parent));
+    when(plaidConnectionRepo.existsByBorrowerIdAndPassportIdAndActiveTrue(borrowerId, draftId))
+        .thenReturn(true);
+    when(entrustRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
+        borrowerId, draftId)).thenReturn(Optional.empty());
+    when(entrustRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
+        borrowerId, parentId)).thenReturn(Optional.of(verification));
+    PassportOutput output = mock(PassportOutput.class);
+    when(outputService.create(borrowerId, draft, true, verification)).thenReturn(output);
+
+    PassportService service = new PassportService(
+        passportRepo, mock(PassportSourceRepo.class), snapshotService,
+        plaidConnectionRepo, surepassRepo, outputService, entrustRepo, true
+    );
+
+    service.generate(borrowerId, draftId);
+
+    verify(outputService).create(borrowerId, draft, true, verification);
+    verify(draft).setStatus("ACTIVE");
+  }
+
+  private Passport passport(UUID id, UUID supersedesId) {
+    Passport passport = mock(Passport.class);
+    when(passport.getId()).thenReturn(id);
+    when(passport.getSupersedesPassportId()).thenReturn(supersedesId);
+    when(passport.getFullName()).thenReturn("Same Person");
+    when(passport.getDob()).thenReturn(LocalDate.of(1990, 1, 1));
+    when(passport.getResidenceCountry()).thenReturn("US");
+    when(passport.getIdentityStatus()).thenReturn("ENTRUST_DECLINED");
+    return passport;
   }
 }
