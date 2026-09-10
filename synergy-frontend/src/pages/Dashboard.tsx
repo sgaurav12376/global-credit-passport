@@ -28,14 +28,6 @@ function reasonLabel(reason?: string) {
   return reason.toLowerCase().replaceAll("_", " ");
 }
 
-function titleLabel(value: string) {
-  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function shortId(value: string | null) {
-  return value ? value.slice(0, 8) : "Not recorded";
-}
-
 function stepForSection(section?: string | null): 1 | 2 | 3 | 4 {
   if (section === "IDENTITY") return 2;
   if (section === "FINANCIAL") return 3;
@@ -114,7 +106,7 @@ export default function Dashboard() {
           <div className="risk-dimensions">{output.document.riskAssessment.dimensions.map((dimension) => <div key={dimension.key}><span><b>{dimension.label}</b><small>{dimension.available ? dimension.band.toLowerCase() : reasonLabel(dimension.reasonCodes[0])}</small></span><strong>{dimension.score ?? "—"}</strong></div>)}</div>
           <p className="risk-disclosure">Pilot risk intelligence only. This is not a lender approval decision. Missing dimensions are not treated as zero.</p>
           <details className="explainability-panel">
-            <summary>How this assessment was calculated</summary>
+            <summary>How my assessment was calculated</summary>
             <div className="explainability-content">
               <section>
                 <span className="eyebrow">RISK CALCULATION</span>
@@ -135,18 +127,7 @@ export default function Dashboard() {
                 </div>
                 <p className="audit-muted">Confidence measures the strength and usability of evidence. It does not increase or decrease the risk index.</p>
               </section>
-              {output.document.riskAssessment.calculationTrace && <section>
-                <span className="eyebrow">EVIDENCE PROVENANCE</span>
-                <h4>{output.document.riskAssessment.calculationTrace.evidence.length} normalized evidence records</h4>
-                <div className="evidence-audit-list">{output.document.riskAssessment.calculationTrace.evidence.map((item) => <div key={`${item.domain}-${item.evidenceId}`}><b>{titleLabel(item.domain)}</b><span>{item.provider} · {item.countryCode}</span><small>{item.completenessPercent}% complete · adapter {item.adapterVersion}</small><small>Retrieved {new Date(item.retrievedAt).toLocaleString()} · ID {shortId(item.evidenceId)}</small></div>)}</div>
-              </section>}
-              <section className="audit-metadata">
-                <span className="eyebrow">AUDIT RECORD</span>
-                <div><span>Assessment schema</span><b>{output.document.riskAssessment.schemaVersion}</b></div>
-                <div><span>Rules version</span><b>{output.document.riskAssessment.modelVersion}</b></div>
-                <div><span>Calculated</span><b>{new Date(output.document.riskAssessment.calculatedAt).toLocaleString()}</b></div>
-                {output.document.riskAssessment.calculationTrace && <div className="fingerprint"><span>Input fingerprint</span><code>{output.document.riskAssessment.calculationTrace.inputFingerprintSha256}</code></div>}
-              </section>
+              <p className="borrower-audit-note">Your detailed evidence provenance and audit record are securely retained with this passport and are not displayed here.</p>
             </div>
           </details>
         </div>}
