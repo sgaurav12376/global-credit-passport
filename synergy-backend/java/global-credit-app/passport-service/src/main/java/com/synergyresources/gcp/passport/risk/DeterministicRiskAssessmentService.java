@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class DeterministicRiskAssessmentService {
-  public static final String MODEL_VERSION = "GCP_RULES_V1";
+  public static final String MODEL_VERSION = "GCP_RULES_V1_1";
 
   public RiskAssessment assess(
       List<NormalizedEvidence> evidence,
@@ -194,11 +194,22 @@ public class DeterministicRiskAssessmentService {
     if (cashflow == null) return unavailable(
         "INCOME_STABILITY", "Income stability", 15, "CASHFLOW_EVIDENCE_UNAVAILABLE"
     );
-    BigDecimal stability = decimal(cashflow.getPayload().path("metrics"), "incomeStabilityPercent");
-    if (stability == null) return unavailable(
-        "INCOME_STABILITY", "Income stability", 15,
-        "INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY"
-    );
+    JsonNode metrics = cashflow.getPayload().path("metrics");
+    BigDecimal stability = decimal(metrics, "incomeStabilityPercent");
+    if (stability == null) {
+      Integer completeMonths = integer(metrics, "completeMonthsAnalyzed");
+      if (completeMonths == null || completeMonths < 2) return unavailable(
+          "INCOME_STABILITY", "Income stability", 15,
+          "INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY"
+      );
+      BigDecimal income = decimal(metrics, "averageMonthlyIncome");
+      if (income == null || income.signum() <= 0) return unavailable(
+          "INCOME_STABILITY", "Income stability", 15,
+          "POSITIVE_ANALYZED_INCOME_UNAVAILABLE"
+      );
+      return unavailable("INCOME_STABILITY", "Income stability", 15,
+          "INCOME_STABILITY_METRIC_UNAVAILABLE");
+    }
     int score = clamp(stability.setScale(0, RoundingMode.HALF_UP).intValue());
     return available("INCOME_STABILITY", "Income stability", 15, score,
         List.of("INCOME_STABILITY_" + score + "_PERCENT"));

@@ -71,7 +71,7 @@ class DeterministicRiskAssessmentServiceTest {
          "creditHistoryMonths":18}}
         """);
     NormalizedEvidence cashflow = evidence("CASHFLOW", 50,
-        "{\"metrics\":{\"averageMonthlyIncome\":0}}");
+        "{\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
     NormalizedEvidence identity = evidence("IDENTITY", 100,
         "{\"status\":\"DECLINED\",\"verified\":false}");
     List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
@@ -85,6 +85,24 @@ class DeterministicRiskAssessmentServiceTest {
     assertEquals("MEDIUM", result.confidence().band());
     assertEquals(50, result.calculationTrace().availableConfiguredWeight());
     assertEquals(100, result.calculationTrace().totalConfiguredWeight());
+    assertEquals("POSITIVE_ANALYZED_INCOME_UNAVAILABLE", result.dimensions().stream()
+        .filter(dimension -> "INCOME_STABILITY".equals(dimension.key()))
+        .findFirst().orElseThrow().reasonCodes().get(0));
+  }
+
+  @Test
+  void explainsWhenIncomeStabilityHasTooFewCompleteMonths() throws Exception {
+    NormalizedEvidence cashflow = evidence("CASHFLOW", 50,
+        "{\"metrics\":{\"completeMonthsAnalyzed\":1,\"averageMonthlyIncome\":6000}}");
+
+    RiskAssessment result = service.assess(
+        List.of(cashflow), new EvidenceCoverageCalculator().calculate(List.of(cashflow)),
+        new CreditBureauReconciliationService().reconcile(List.of(cashflow))
+    );
+
+    assertEquals("INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY", result.dimensions().stream()
+        .filter(dimension -> "INCOME_STABILITY".equals(dimension.key()))
+        .findFirst().orElseThrow().reasonCodes().get(0));
   }
 
   private NormalizedEvidence evidence(String domain, int completeness, String json) throws Exception {
