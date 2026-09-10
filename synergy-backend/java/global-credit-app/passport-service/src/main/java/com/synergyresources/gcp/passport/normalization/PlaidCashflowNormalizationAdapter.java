@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class PlaidCashflowNormalizationAdapter
     implements NormalizationAdapter<JsonNode, GcpNormalized.CashflowDataset> {
   public String adapterId() { return "plaid-cashflow"; }
-  public String adapterVersion() { return "1.0.0"; }
+  public String adapterVersion() { return "1.1.0"; }
 
   public GcpNormalized.CashflowDataset normalize(JsonNode source, NormalizationContext context) {
     List<String> fields = new ArrayList<>();
@@ -23,9 +23,10 @@ public class PlaidCashflowNormalizationAdapter
     add(fields, source, "incomeStabilityPercent");
     int completeness = Math.min(100, Math.round(fields.size() * 100f / 6f));
     List<String> warnings = new ArrayList<>();
-    if (integer(source, "completeMonthsAnalyzed") == null
-        || integer(source, "completeMonthsAnalyzed") < 2) {
+    Integer completeMonths = integer(source, "completeMonthsAnalyzed");
+    if (completeMonths == null || completeMonths < 2) {
       warnings.add("Fewer than two complete months of cash-flow history are available");
+      completeness = Math.min(completeness, 50);
     }
     return new GcpNormalized.CashflowDataset(
         "GCP_CASHFLOW_V1",
@@ -37,7 +38,7 @@ public class PlaidCashflowNormalizationAdapter
         new GcpNormalized.CashflowMetrics(
             integer(source, "institutionConnections"), integer(source, "depositoryAccounts"),
             integer(source, "analyzedTransactions"), date(source, "coverageStart"),
-            date(source, "coverageEnd"), integer(source, "completeMonthsAnalyzed"),
+            date(source, "coverageEnd"), completeMonths,
             decimal(source, "averageMonthlyDetectedIncome"),
             decimal(source, "averageMonthlyOutflows"),
             decimal(source, "averageMonthlyDebtPayments"),

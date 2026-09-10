@@ -91,3 +91,10 @@ consistency, and identity assurance. Consequently, a strong risk index can still
 medium confidence. Every output records model type/version, reason codes, missing dimensions,
 disclosures, and calculation time. A future statistical or machine-learning model can implement
 the same versioned output contract and operate as a challenger to this deterministic baseline.
+
+Cash-flow completeness is capped when fewer than two complete months are available. Confidence
+also includes analytical availability, so structurally present evidence cannot produce a high
+confidence label when several risk dimensions remain uncalculable. Scoring uses only the latest
+record for each country/provider/source combination; older immutable records remain available for
+audit history. Adapter version is part of evidence identity, allowing corrected normalization to
+coexist with earlier versions without overwriting them.

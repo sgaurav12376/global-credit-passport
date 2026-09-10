@@ -50,4 +50,24 @@ class IndependentNormalizationTest {
     assertEquals(new BigDecimal("1800"), cashflow.metrics().averageMonthlyNetCashflow());
     assertTrue(cashflow.dataQuality().completenessPercent() >= 80);
   }
+
+  @Test
+  void cashflowCompletenessIsCappedWithoutTwoCompleteMonths() throws Exception {
+    var cashflow = new PlaidCashflowNormalizationAdapter().normalize(
+        mapper.readTree("""
+          {"analyzedTransactions":40,"coverageStart":"2026-08-01",
+           "coverageEnd":"2026-09-01","completeMonthsAnalyzed":0,
+           "averageMonthlyDetectedIncome":0,"averageMonthlyOutflows":0}
+          """),
+        new NormalizationContext(
+            "US", "PLAID", "OPEN_BANKING", "snapshot-2", "plaid-consent-v1",
+            Instant.parse("2026-09-09T10:00:00Z"),
+            Instant.parse("2026-09-09T10:01:00Z"), null
+        )
+    );
+
+    assertEquals(50, cashflow.dataQuality().completenessPercent());
+    assertTrue(cashflow.dataQuality().warnings().stream()
+        .anyMatch(value -> value.contains("two complete months")));
+  }
 }

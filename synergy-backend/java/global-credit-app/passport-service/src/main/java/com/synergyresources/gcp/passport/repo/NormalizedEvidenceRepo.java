@@ -10,8 +10,8 @@ public interface NormalizedEvidenceRepo extends JpaRepository<NormalizedEvidence
   List<NormalizedEvidence> findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
       UUID borrowerId, UUID passportId
   );
-  Optional<NormalizedEvidence> findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersion(
+  Optional<NormalizedEvidence> findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersionAndAdapterVersion(
       UUID passportId, String domain, String provider, String sourceSystem,
-      String providerReference, String schemaVersion
+      String providerReference, String schemaVersion, String adapterVersion
   );
 }

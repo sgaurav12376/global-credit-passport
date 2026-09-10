@@ -33,6 +33,7 @@ public record RiskAssessment(
       int completenessComponent,
       int freshnessComponent,
       int consistencyComponent,
-      int identityAssuranceComponent
+      int identityAssuranceComponent,
+      int analyticalAvailabilityComponent
   ) {}
 }

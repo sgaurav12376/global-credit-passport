@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.synergyresources.gcp.passport.model.NormalizedEvidence;
 import com.synergyresources.gcp.passport.repo.NormalizedEvidenceRepo;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,8 +55,19 @@ public class NormalizedEvidenceService {
   }
 
   @Transactional(readOnly = true)
+  public List<NormalizedEvidence> currentEvidence(UUID borrowerId, UUID passportId) {
+    LinkedHashMap<String, NormalizedEvidence> current = new LinkedHashMap<>();
+    evidence(borrowerId, passportId).forEach(item -> current.putIfAbsent(
+        item.getDomain() + ":" + item.getCountryCode() + ":" + item.getProvider()
+            + ":" + item.getSourceSystem(),
+        item
+    ));
+    return List.copyOf(current.values());
+  }
+
+  @Transactional(readOnly = true)
   public EvidenceCoverage coverage(UUID borrowerId, UUID passportId) {
-    return coverageCalculator.calculate(evidence(borrowerId, passportId));
+    return coverageCalculator.calculate(currentEvidence(borrowerId, passportId));
   }
 
   private NormalizedEvidence save(
@@ -63,9 +75,9 @@ public class NormalizedEvidenceService {
       GcpNormalized.Provenance provenance, GcpNormalized.DataQuality quality, Object dataset
   ) {
     var existing = repo
-        .findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersion(
+        .findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersionAndAdapterVersion(
             passportId, domain, provenance.provider(), provenance.sourceSystem(),
-            provenance.providerReference(), schemaVersion
+            provenance.providerReference(), schemaVersion, provenance.adapterVersion()
         );
     if (existing.isPresent()) return existing.get();
 

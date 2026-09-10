@@ -23,6 +23,11 @@ function identityLabel(status?: string | null, sandbox = true) {
   return "Profile provided";
 }
 
+function reasonLabel(reason?: string) {
+  if (!reason) return "Unavailable";
+  return reason.toLowerCase().replaceAll("_", " ");
+}
+
 function stepForSection(section?: string | null): 1 | 2 | 3 | 4 {
   if (section === "IDENTITY") return 2;
   if (section === "FINANCIAL") return 3;
@@ -98,7 +103,7 @@ export default function Dashboard() {
         </div>}
         {output.document.riskAssessment && <div className="risk-panel">
           <div className="risk-head"><div><span className="eyebrow">RISK INTELLIGENCE</span><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 GCP risk index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : output.document.riskAssessment.riskBand.replaceAll("_", " ")}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>{output.document.riskAssessment.confidence.band.toLowerCase()} confidence</span></div></div>
-          <div className="risk-dimensions">{output.document.riskAssessment.dimensions.map((dimension) => <div key={dimension.key}><span><b>{dimension.label}</b><small>{dimension.available ? dimension.band.toLowerCase() : "Unavailable"}</small></span><strong>{dimension.score ?? "—"}</strong></div>)}</div>
+          <div className="risk-dimensions">{output.document.riskAssessment.dimensions.map((dimension) => <div key={dimension.key}><span><b>{dimension.label}</b><small>{dimension.available ? dimension.band.toLowerCase() : reasonLabel(dimension.reasonCodes[0])}</small></span><strong>{dimension.score ?? "—"}</strong></div>)}</div>
           <p className="risk-disclosure">Pilot risk intelligence only. This is not a lender approval decision. Missing dimensions are not treated as zero.</p>
         </div>}
       </section>}

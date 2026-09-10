@@ -49,7 +49,9 @@ public class NormalizedEvidenceSyncService {
         .forEach(report -> persistCredit(borrowerId, passport, report));
     if (entrust != null) persistIdentity(borrowerId, passport, entrust);
 
-    List<NormalizedEvidence> evidence = evidenceService.evidence(borrowerId, passport.getId());
+    List<NormalizedEvidence> evidence = evidenceService.currentEvidence(
+        borrowerId, passport.getId()
+    );
     return new SyncResult(evidence, evidenceService.coverage(borrowerId, passport.getId()));
   }
 

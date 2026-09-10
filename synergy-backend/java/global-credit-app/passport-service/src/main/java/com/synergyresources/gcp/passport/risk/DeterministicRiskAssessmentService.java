@@ -39,7 +39,9 @@ public class DeterministicRiskAssessmentService {
     if (!missing.isEmpty()) disclosures.add("Some risk dimensions are unavailable");
     return new RiskAssessment(
         "GCP_RISK_ASSESSMENT_V1", "DETERMINISTIC_RULES", MODEL_VERSION,
-        status, index, riskBand(index), confidence(evidence, coverage, reconciliation),
+        status, index, riskBand(index), confidence(
+            evidence, coverage, reconciliation, dimensions
+        ),
         dimensions, missing, List.copyOf(disclosures), Instant.now()
     );
   }
@@ -89,12 +91,19 @@ public class DeterministicRiskAssessmentService {
   }
 
   private RiskAssessment.Dimension debtBurden(NormalizedEvidence cashflow) {
-    if (cashflow == null) return unavailable("DEBT_BURDEN", "Debt burden", 15);
+    if (cashflow == null) return unavailable(
+        "DEBT_BURDEN", "Debt burden", 15, "CASHFLOW_EVIDENCE_UNAVAILABLE"
+    );
     JsonNode metrics = cashflow.getPayload().path("metrics");
     BigDecimal income = decimal(metrics, "averageMonthlyIncome");
     BigDecimal debt = decimal(metrics, "averageMonthlyDebtPayments");
-    if (income == null || debt == null || income.signum() <= 0) {
-      return unavailable("DEBT_BURDEN", "Debt burden", 15);
+    if (income == null || income.signum() <= 0) {
+      return unavailable("DEBT_BURDEN", "Debt burden", 15,
+          "POSITIVE_ANALYZED_INCOME_UNAVAILABLE");
+    }
+    if (debt == null) {
+      return unavailable("DEBT_BURDEN", "Debt burden", 15,
+          "DEBT_PAYMENT_METRIC_UNAVAILABLE");
     }
     BigDecimal ratio = debt.divide(income, 4, RoundingMode.HALF_UP);
     int score = ratio.compareTo(new BigDecimal("0.15")) <= 0 ? 95
@@ -106,12 +115,19 @@ public class DeterministicRiskAssessmentService {
   }
 
   private RiskAssessment.Dimension cashflowCapacity(NormalizedEvidence cashflow) {
-    if (cashflow == null) return unavailable("CASHFLOW_CAPACITY", "Cash-flow capacity", 20);
+    if (cashflow == null) return unavailable(
+        "CASHFLOW_CAPACITY", "Cash-flow capacity", 20, "CASHFLOW_EVIDENCE_UNAVAILABLE"
+    );
     JsonNode metrics = cashflow.getPayload().path("metrics");
     BigDecimal income = decimal(metrics, "averageMonthlyIncome");
     BigDecimal net = decimal(metrics, "averageMonthlyNetCashflow");
-    if (income == null || net == null || income.signum() <= 0) {
-      return unavailable("CASHFLOW_CAPACITY", "Cash-flow capacity", 20);
+    if (income == null || income.signum() <= 0) {
+      return unavailable("CASHFLOW_CAPACITY", "Cash-flow capacity", 20,
+          "POSITIVE_ANALYZED_INCOME_UNAVAILABLE");
+    }
+    if (net == null) {
+      return unavailable("CASHFLOW_CAPACITY", "Cash-flow capacity", 20,
+          "NET_CASHFLOW_METRIC_UNAVAILABLE");
     }
     BigDecimal ratio = net.divide(income, 4, RoundingMode.HALF_UP);
     int score = ratio.compareTo(new BigDecimal("0.30")) >= 0 ? 95
@@ -124,9 +140,14 @@ public class DeterministicRiskAssessmentService {
   }
 
   private RiskAssessment.Dimension incomeStability(NormalizedEvidence cashflow) {
-    if (cashflow == null) return unavailable("INCOME_STABILITY", "Income stability", 15);
+    if (cashflow == null) return unavailable(
+        "INCOME_STABILITY", "Income stability", 15, "CASHFLOW_EVIDENCE_UNAVAILABLE"
+    );
     BigDecimal stability = decimal(cashflow.getPayload().path("metrics"), "incomeStabilityPercent");
-    if (stability == null) return unavailable("INCOME_STABILITY", "Income stability", 15);
+    if (stability == null) return unavailable(
+        "INCOME_STABILITY", "Income stability", 15,
+        "INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY"
+    );
     int score = clamp(stability.setScale(0, RoundingMode.HALF_UP).intValue());
     return available("INCOME_STABILITY", "Income stability", 15, score,
         List.of("INCOME_STABILITY_" + score + "_PERCENT"));
@@ -145,7 +166,8 @@ public class DeterministicRiskAssessmentService {
   private RiskAssessment.Confidence confidence(
       List<NormalizedEvidence> evidence,
       EvidenceCoverage coverage,
-      CreditBureauReconciliation reconciliation
+      CreditBureauReconciliation reconciliation,
+      List<RiskAssessment.Dimension> dimensions
   ) {
     int completeness = evidence.isEmpty() ? 0 : (int) Math.round(evidence.stream()
         .mapToInt(NormalizedEvidence::getCompletenessPercent).average().orElse(0));
@@ -159,13 +181,16 @@ public class DeterministicRiskAssessmentService {
     int identityAssurance = identity == null ? 0
         : identity.getPayload().path("verified").asBoolean(false) ? 100
         : "DECLINED".equals(identity.getPayload().path("status").asText()) ? 25 : 40;
+    int analyticalAvailability = (int) Math.round(dimensions.stream()
+        .filter(RiskAssessment.Dimension::available).count() * 100d / dimensions.size());
     int score = Math.round(
-        coverage.coveragePercent() * .35f + completeness * .25f + freshness * .20f
+        coverage.coveragePercent() * .25f + completeness * .20f + freshness * .15f
             + consistency * .10f + identityAssurance * .10f
+            + analyticalAvailability * .20f
     );
     return new RiskAssessment.Confidence(
         clamp(score), confidenceBand(score), coverage.coveragePercent(), completeness,
-        freshness, consistency, identityAssurance
+        freshness, consistency, identityAssurance, analyticalAvailability
     );
   }
 
@@ -202,8 +227,14 @@ public class DeterministicRiskAssessmentService {
   }
 
   private RiskAssessment.Dimension unavailable(String key, String label, int weight) {
+    return unavailable(key, label, weight, "INSUFFICIENT_DATA");
+  }
+
+  private RiskAssessment.Dimension unavailable(
+      String key, String label, int weight, String reason
+  ) {
     return new RiskAssessment.Dimension(
-        key, label, false, null, weight, "UNAVAILABLE", List.of("INSUFFICIENT_DATA")
+        key, label, false, null, weight, "UNAVAILABLE", List.of(reason)
     );
   }
 

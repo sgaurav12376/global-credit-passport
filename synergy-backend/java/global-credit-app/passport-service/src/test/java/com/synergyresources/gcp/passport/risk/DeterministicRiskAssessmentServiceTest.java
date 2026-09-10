@@ -42,6 +42,7 @@ class DeterministicRiskAssessmentServiceTest {
     assertEquals(6, result.dimensions().stream().filter(RiskAssessment.Dimension::available).count());
     assertTrue(result.confidence().score() < result.riskIndex());
     assertEquals(25, result.confidence().identityAssuranceComponent());
+    assertEquals(100, result.confidence().analyticalAvailabilityComponent());
   }
 
   @Test
@@ -55,6 +56,28 @@ class DeterministicRiskAssessmentServiceTest {
 
     assertEquals("INSUFFICIENT_EVIDENCE", result.status());
     assertEquals(null, result.riskIndex());
+  }
+
+  @Test
+  void unavailableDimensionsReduceConfidenceBand() throws Exception {
+    NormalizedEvidence credit = evidence("CREDIT", 75, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+         "writtenOffAccounts":0,"currentBalance":90000,"sanctionedAmount":100000,
+         "creditHistoryMonths":18}}
+        """);
+    NormalizedEvidence cashflow = evidence("CASHFLOW", 50,
+        "{\"metrics\":{\"averageMonthlyIncome\":0}}");
+    NormalizedEvidence identity = evidence("IDENTITY", 100,
+        "{\"status\":\"DECLINED\",\"verified\":false}");
+    List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals(50, result.confidence().analyticalAvailabilityComponent());
+    assertEquals("MEDIUM", result.confidence().band());
   }
 
   private NormalizedEvidence evidence(String domain, int completeness, String json) throws Exception {

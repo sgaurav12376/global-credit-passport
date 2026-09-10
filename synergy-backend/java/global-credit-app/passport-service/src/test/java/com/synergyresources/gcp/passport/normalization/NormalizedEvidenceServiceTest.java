@@ -19,8 +19,8 @@ class NormalizedEvidenceServiceTest {
   @Test
   void persistsNormalizedDatasetWithProvenanceAndQuality() {
     NormalizedEvidenceRepo repo = mock(NormalizedEvidenceRepo.class);
-    when(repo.findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersion(
-        any(), any(), any(), any(), any(), any()
+    when(repo.findFirstByPassportIdAndDomainAndProviderAndSourceSystemAndProviderReferenceAndSchemaVersionAndAdapterVersion(
+        any(), any(), any(), any(), any(), any(), any()
     )).thenReturn(Optional.empty());
     when(repo.saveAndFlush(any(NormalizedEvidence.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -48,5 +48,37 @@ class NormalizedEvidenceServiceTest {
     assertEquals("GCP_CREDIT_V1", saved.getSchemaVersion());
     assertEquals(25, saved.getCompletenessPercent());
     assertEquals(785, saved.getPayload().path("nativeScore").path("value").asInt());
+  }
+
+  @Test
+  void currentEvidenceUsesLatestRecordPerProviderSource() {
+    UUID borrowerId = UUID.randomUUID();
+    UUID passportId = UUID.randomUUID();
+    NormalizedEvidenceRepo repo = mock(NormalizedEvidenceRepo.class);
+    NormalizedEvidence latestPlaid = evidence("CASHFLOW", "US", "PLAID", "OPEN_BANKING", 50);
+    NormalizedEvidence olderPlaid = evidence("CASHFLOW", "US", "PLAID", "OPEN_BANKING", 83);
+    NormalizedEvidence credit = evidence("CREDIT", "IN", "SUREPASS", "CRIF", 75);
+    when(repo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
+        .thenReturn(List.of(latestPlaid, olderPlaid, credit));
+    NormalizedEvidenceService service = new NormalizedEvidenceService(
+        repo, new EvidenceCoverageCalculator(), new ObjectMapper().findAndRegisterModules()
+    );
+
+    List<NormalizedEvidence> current = service.currentEvidence(borrowerId, passportId);
+
+    assertEquals(2, current.size());
+    assertEquals(50, current.get(0).getCompletenessPercent());
+  }
+
+  private NormalizedEvidence evidence(
+      String domain, String country, String provider, String source, int completeness
+  ) {
+    NormalizedEvidence value = new NormalizedEvidence();
+    value.setDomain(domain);
+    value.setCountryCode(country);
+    value.setProvider(provider);
+    value.setSourceSystem(source);
+    value.setCompletenessPercent(completeness);
+    return value;
   }
 }
