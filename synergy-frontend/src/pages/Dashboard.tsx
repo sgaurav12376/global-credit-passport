@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getLatestPassport, getPassportHistory, getPassportOutput } from "../api/passport";
 import type { PassportOutput, PassportView } from "../api/passport";
 import { getAccessToken, logout } from "../auth/auth";
+import PassportSharing from "../components/PassportSharing";
 
 const PASSPORT_LS_KEY = "gcp.passportInit";
 
@@ -132,6 +133,7 @@ export default function Dashboard() {
           </details>
         </div>}
       </section>}
+      {output && <PassportSharing passportId={output.passportId}/>}
       <details className="history-disclosure"><summary>Activity and passport history</summary><div className="version-list">{history.filter((item) => item.status !== "CANCELLED").map((item) => <button key={item.passportId} onClick={() => open(item, "view")}><span><b>{item.originCountry} → {item.destCountry}</b><small>{new Date(item.updatedAt).toLocaleString()}</small></span><em>{uiStatus(item.status)}</em></button>)}</div></details>
     </>}
   </main></div>;

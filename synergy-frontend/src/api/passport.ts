@@ -172,6 +172,43 @@ export type PassportOutput = {
   };
 };
 
+export type PassportShareSummary = {
+  shareId: string;
+  recipientName: string;
+  purpose: string;
+  scope: string;
+  status: "ACTIVE" | "EXPIRED" | "REVOKED";
+  consentedAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  lastAccessedAt: string | null;
+  accessCount: number;
+};
+
+export type SharedPassport = {
+  recipientName: string;
+  purpose: string;
+  scope: string;
+  consentedAt: string;
+  expiresAt: string;
+  publishedAt: string;
+  report: {
+    schemaVersion: string;
+    passportId: string;
+    subject: { fullName: string; dateOfBirth: string };
+    corridor: { purpose: string; originCountry: string; destinationCountry: string };
+    identityVerification: {
+      provider: string;
+      status: string;
+      sandboxSimulation: boolean;
+      approvalRequiredForPilot: boolean;
+    };
+    evidenceCoverage: NonNullable<PassportOutput["document"]["evidenceCoverage"]>;
+    creditReconciliation: NonNullable<PassportOutput["document"]["creditReconciliation"]>;
+    riskAssessment: NonNullable<PassportOutput["document"]["riskAssessment"]>;
+  };
+};
+
 async function ensureOk(res: Response, label: string) {
   if (res.ok) return;
   const txt = await res.text().catch(() => "");
@@ -248,4 +285,45 @@ export async function getPassportHistory() {
   const res = await fetch(`${API_BASE}/v1/passports`);
   await ensureOk(res, "getPassportHistory");
   return (await res.json()) as PassportView[];
+}
+
+export async function createPassportShare(passportId: string, payload: {
+  recipientName: string;
+  purpose: string;
+  expiresInDays: number;
+  consentConfirmed: boolean;
+}) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await ensureOk(res, "Create passport share");
+  return (await res.json()) as {
+    shareId: string;
+    token: string;
+    recipientName: string;
+    purpose: string;
+    expiresAt: string;
+  };
+}
+
+export async function getPassportShares(passportId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/shares`);
+  await ensureOk(res, "Load passport shares");
+  return (await res.json()) as PassportShareSummary[];
+}
+
+export async function revokePassportShare(passportId: string, shareId: string) {
+  const res = await fetch(`${API_BASE}/v1/passports/${passportId}/shares/${shareId}`, {
+    method: "DELETE",
+  });
+  await ensureOk(res, "Revoke passport share");
+  return (await res.json()) as PassportShareSummary;
+}
+
+export async function getSharedPassport(token: string) {
+  const res = await window.fetch(`${API_BASE}/v1/shared-passports/${encodeURIComponent(token)}`);
+  await ensureOk(res, "Open shared passport");
+  return (await res.json()) as SharedPassport;
 }

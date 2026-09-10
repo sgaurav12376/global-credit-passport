@@ -7,6 +7,7 @@ import PassportInit from "./pages/PassportInit";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import LenderPassport from "./pages/LenderPassport";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/lender/passport/:token" element={<LenderPassport />} />
       <Route path="*" element={<Navigate to="/get-started" replace />} />
     </Routes>
   );

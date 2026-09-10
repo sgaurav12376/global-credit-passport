@@ -32,6 +32,7 @@ public class CognitoSecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+            .requestMatchers(HttpMethod.GET, "/v1/shared-passports/**").permitAll()
             .requestMatchers("/v1/**").authenticated()
             .anyRequest().denyAll()
         )

@@ -9,4 +9,7 @@ public interface PassportOutputRepo extends JpaRepository<PassportOutput, UUID> 
   Optional<PassportOutput> findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
       UUID borrowerId, UUID passportId
   );
+  Optional<PassportOutput> findByIdAndBorrowerIdAndPassportId(
+      UUID id, UUID borrowerId, UUID passportId
+  );
 }
