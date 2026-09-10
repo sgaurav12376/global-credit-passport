@@ -2,6 +2,7 @@ package com.synergyresources.gcp.passport.risk;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record RiskAssessment(
     String schemaVersion,
@@ -13,6 +14,7 @@ public record RiskAssessment(
     Confidence confidence,
     List<Dimension> dimensions,
     List<String> missingDimensions,
+    CalculationTrace calculationTrace,
     List<String> disclosures,
     Instant calculatedAt
 ) {
@@ -35,5 +37,26 @@ public record RiskAssessment(
       int consistencyComponent,
       int identityAssuranceComponent,
       int analyticalAvailabilityComponent
+  ) {}
+
+  public record CalculationTrace(
+      String aggregationMethod,
+      int availableConfiguredWeight,
+      int totalConfiguredWeight,
+      String inputFingerprintSha256,
+      List<EvidenceReference> evidence
+  ) {}
+
+  public record EvidenceReference(
+      UUID evidenceId,
+      String domain,
+      String countryCode,
+      String provider,
+      String sourceSystem,
+      String schemaVersion,
+      String adapterId,
+      String adapterVersion,
+      int completenessPercent,
+      Instant retrievedAt
   ) {}
 }

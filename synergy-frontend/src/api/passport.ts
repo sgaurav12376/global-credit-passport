@@ -142,6 +142,24 @@ export type PassportOutput = {
         reasonCodes: string[];
       }>;
       missingDimensions: string[];
+      calculationTrace: {
+        aggregationMethod: "WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS";
+        availableConfiguredWeight: number;
+        totalConfiguredWeight: number;
+        inputFingerprintSha256: string;
+        evidence: Array<{
+          evidenceId: string | null;
+          domain: string;
+          countryCode: string;
+          provider: string;
+          sourceSystem: string;
+          schemaVersion: string;
+          adapterId: string;
+          adapterVersion: string;
+          completenessPercent: number;
+          retrievedAt: string;
+        }>;
+      };
       disclosures: string[];
       calculatedAt: string;
     };

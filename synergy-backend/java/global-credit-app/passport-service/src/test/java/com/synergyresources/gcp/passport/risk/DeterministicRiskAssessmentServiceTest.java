@@ -43,6 +43,11 @@ class DeterministicRiskAssessmentServiceTest {
     assertTrue(result.confidence().score() < result.riskIndex());
     assertEquals(25, result.confidence().identityAssuranceComponent());
     assertEquals(100, result.confidence().analyticalAvailabilityComponent());
+    assertEquals("WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS",
+        result.calculationTrace().aggregationMethod());
+    assertEquals(100, result.calculationTrace().availableConfiguredWeight());
+    assertEquals(3, result.calculationTrace().evidence().size());
+    assertEquals(64, result.calculationTrace().inputFingerprintSha256().length());
   }
 
   @Test
@@ -78,6 +83,8 @@ class DeterministicRiskAssessmentServiceTest {
 
     assertEquals(50, result.confidence().analyticalAvailabilityComponent());
     assertEquals("MEDIUM", result.confidence().band());
+    assertEquals(50, result.calculationTrace().availableConfiguredWeight());
+    assertEquals(100, result.calculationTrace().totalConfiguredWeight());
   }
 
   private NormalizedEvidence evidence(String domain, int completeness, String json) throws Exception {
@@ -86,6 +93,9 @@ class DeterministicRiskAssessmentServiceTest {
     value.setCountryCode("IN");
     value.setProvider(domain.equals("CASHFLOW") ? "PLAID" : "SUREPASS");
     value.setSourceSystem(domain);
+    value.setSchemaVersion("GCP_" + domain + "_V1");
+    value.setAdapterId("TEST_" + domain);
+    value.setAdapterVersion("1.0.0");
     value.setCompletenessPercent(completeness);
     value.setRetrievedAt(Instant.now());
     value.setPayload(mapper.readTree(json));

@@ -6,10 +6,14 @@ import com.synergyresources.gcp.passport.normalization.CreditBureauReconciliatio
 import com.synergyresources.gcp.passport.normalization.EvidenceCoverage;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -37,13 +41,60 @@ public class DeterministicRiskAssessmentService {
     disclosures.add("Missing dimensions are excluded, never treated as zero");
     disclosures.add("Native bureau scores are preserved and are not averaged");
     if (!missing.isEmpty()) disclosures.add("Some risk dimensions are unavailable");
+    RiskAssessment.CalculationTrace trace = calculationTrace(evidence, dimensions);
     return new RiskAssessment(
-        "GCP_RISK_ASSESSMENT_V1", "DETERMINISTIC_RULES", MODEL_VERSION,
+        "GCP_RISK_ASSESSMENT_V2", "DETERMINISTIC_RULES", MODEL_VERSION,
         status, index, riskBand(index), confidence(
             evidence, coverage, reconciliation, dimensions
         ),
-        dimensions, missing, List.copyOf(disclosures), Instant.now()
+        dimensions, missing, trace, List.copyOf(disclosures), Instant.now()
     );
+  }
+
+  private RiskAssessment.CalculationTrace calculationTrace(
+      List<NormalizedEvidence> evidence,
+      List<RiskAssessment.Dimension> dimensions
+  ) {
+    List<RiskAssessment.EvidenceReference> references = evidence.stream()
+        .sorted(Comparator.comparing((NormalizedEvidence item) -> item.getDomain())
+            .thenComparing(item -> item.getProvider())
+            .thenComparing(item -> item.getSourceSystem())
+            .thenComparing(item -> item.getId() == null ? "" : item.getId().toString()))
+        .map(item -> new RiskAssessment.EvidenceReference(
+            item.getId(), item.getDomain(), item.getCountryCode(), item.getProvider(),
+            item.getSourceSystem(), item.getSchemaVersion(), item.getAdapterId(),
+            item.getAdapterVersion(), item.getCompletenessPercent(), item.getRetrievedAt()
+        )).toList();
+    int totalWeight = dimensions.stream()
+        .mapToInt(RiskAssessment.Dimension::configuredWeight).sum();
+    int availableWeight = dimensions.stream().filter(RiskAssessment.Dimension::available)
+        .mapToInt(RiskAssessment.Dimension::configuredWeight).sum();
+    String fingerprintMaterial = MODEL_VERSION + "|" + references.stream()
+        .map(reference -> String.join(":",
+            value(reference.evidenceId()), value(reference.domain()),
+            value(reference.countryCode()), value(reference.provider()),
+            value(reference.sourceSystem()), value(reference.schemaVersion()),
+            value(reference.adapterId()), value(reference.adapterVersion()),
+            Integer.toString(reference.completenessPercent()), value(reference.retrievedAt())))
+        .reduce((left, right) -> left + "|" + right).orElse("");
+    return new RiskAssessment.CalculationTrace(
+        "WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS", availableWeight, totalWeight,
+        sha256(fingerprintMaterial), references
+    );
+  }
+
+  private String value(Object value) {
+    return value == null ? "" : value.toString();
+  }
+
+  private String sha256(String value) {
+    try {
+      return HexFormat.of().formatHex(
+          MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
+      );
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
   }
 
   private RiskAssessment.Dimension repayment(NormalizedEvidence credit) {

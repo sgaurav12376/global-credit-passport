@@ -95,8 +95,12 @@ class PassportOutputServiceTest {
     assertEquals(71, document.path("evidenceCoverage").path("coveragePercent").asInt());
     assertEquals("GCP_CREDIT_RECONCILIATION_V1",
         document.path("creditReconciliation").path("schemaVersion").asText());
-    assertEquals("GCP_RISK_ASSESSMENT_V1",
+    assertEquals("GCP_RISK_ASSESSMENT_V2",
         document.path("riskAssessment").path("schemaVersion").asText());
+    assertEquals("WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS", document.path("riskAssessment")
+        .path("calculationTrace").path("aggregationMethod").asText());
+    assertEquals(64, document.path("riskAssessment").path("calculationTrace")
+        .path("inputFingerprintSha256").asText().length());
     assertNotNull(output.getDocument());
   }
 
