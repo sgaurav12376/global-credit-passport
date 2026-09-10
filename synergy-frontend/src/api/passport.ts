@@ -131,6 +131,12 @@ export type PassportOutput = {
       confidence: {
         score: number;
         band: "HIGH" | "MEDIUM" | "LOW";
+        coverageComponent: number;
+        completenessComponent: number;
+        freshnessComponent: number;
+        consistencyComponent: number;
+        identityAssuranceComponent: number;
+        analyticalAvailabilityComponent: number;
       };
       dimensions: Array<{
         key: string;
@@ -142,7 +148,7 @@ export type PassportOutput = {
         reasonCodes: string[];
       }>;
       missingDimensions: string[];
-      calculationTrace: {
+      calculationTrace?: {
         aggregationMethod: "WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS";
         availableConfiguredWeight: number;
         totalConfiguredWeight: number;

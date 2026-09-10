@@ -28,6 +28,14 @@ function reasonLabel(reason?: string) {
   return reason.toLowerCase().replaceAll("_", " ");
 }
 
+function titleLabel(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function shortId(value: string | null) {
+  return value ? value.slice(0, 8) : "Not recorded";
+}
+
 function stepForSection(section?: string | null): 1 | 2 | 3 | 4 {
   if (section === "IDENTITY") return 2;
   if (section === "FINANCIAL") return 3;
@@ -105,6 +113,42 @@ export default function Dashboard() {
           <div className="risk-head"><div><span className="eyebrow">RISK INTELLIGENCE</span><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 GCP risk index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : output.document.riskAssessment.riskBand.replaceAll("_", " ")}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>{output.document.riskAssessment.confidence.band.toLowerCase()} confidence</span></div></div>
           <div className="risk-dimensions">{output.document.riskAssessment.dimensions.map((dimension) => <div key={dimension.key}><span><b>{dimension.label}</b><small>{dimension.available ? dimension.band.toLowerCase() : reasonLabel(dimension.reasonCodes[0])}</small></span><strong>{dimension.score ?? "—"}</strong></div>)}</div>
           <p className="risk-disclosure">Pilot risk intelligence only. This is not a lender approval decision. Missing dimensions are not treated as zero.</p>
+          <details className="explainability-panel">
+            <summary>How this assessment was calculated</summary>
+            <div className="explainability-content">
+              <section>
+                <span className="eyebrow">RISK CALCULATION</span>
+                <h4>Available dimensions only</h4>
+                {output.document.riskAssessment.calculationTrace ? <>
+                  <div className="formula-box">
+                    <code>({output.document.riskAssessment.dimensions.filter((item) => item.available).map((item) => `${item.score} × ${item.configuredWeight}`).join(" + ")}) ÷ {output.document.riskAssessment.calculationTrace.availableConfiguredWeight} = {output.document.riskAssessment.riskIndex}</code>
+                    <small>{output.document.riskAssessment.calculationTrace.availableConfiguredWeight} of {output.document.riskAssessment.calculationTrace.totalConfiguredWeight} configured weight was usable. Missing dimensions were excluded.</small>
+                  </div>
+                  <div className="audit-dimension-list">{output.document.riskAssessment.dimensions.map((item) => <div key={item.key}><span><b>{item.label}</b><small>{item.available ? `${item.score}/100 · ${item.configuredWeight}% weight` : `${item.configuredWeight}% weight · excluded: ${reasonLabel(item.reasonCodes[0])}`}</small></span><em>{item.available ? "Included" : "Excluded"}</em></div>)}</div>
+                </> : <p className="audit-muted">This legacy output predates the calculation trace. Regenerate the passport to create a V2 audit record.</p>}
+              </section>
+              <section>
+                <span className="eyebrow">CONFIDENCE</span>
+                <h4>{output.document.riskAssessment.confidence.score}% {output.document.riskAssessment.confidence.band.toLowerCase()} confidence</h4>
+                <div className="confidence-components">
+                  {[ ["Evidence coverage", output.document.riskAssessment.confidence.coverageComponent], ["Completeness", output.document.riskAssessment.confidence.completenessComponent], ["Freshness", output.document.riskAssessment.confidence.freshnessComponent], ["Consistency", output.document.riskAssessment.confidence.consistencyComponent], ["Identity assurance", output.document.riskAssessment.confidence.identityAssuranceComponent], ["Analytical availability", output.document.riskAssessment.confidence.analyticalAvailabilityComponent] ].map(([label, value]) => <div key={String(label)}><span>{label}</span><b>{value}%</b></div>)}
+                </div>
+                <p className="audit-muted">Confidence measures the strength and usability of evidence. It does not increase or decrease the risk index.</p>
+              </section>
+              {output.document.riskAssessment.calculationTrace && <section>
+                <span className="eyebrow">EVIDENCE PROVENANCE</span>
+                <h4>{output.document.riskAssessment.calculationTrace.evidence.length} normalized evidence records</h4>
+                <div className="evidence-audit-list">{output.document.riskAssessment.calculationTrace.evidence.map((item) => <div key={`${item.domain}-${item.evidenceId}`}><b>{titleLabel(item.domain)}</b><span>{item.provider} · {item.countryCode}</span><small>{item.completenessPercent}% complete · adapter {item.adapterVersion}</small><small>Retrieved {new Date(item.retrievedAt).toLocaleString()} · ID {shortId(item.evidenceId)}</small></div>)}</div>
+              </section>}
+              <section className="audit-metadata">
+                <span className="eyebrow">AUDIT RECORD</span>
+                <div><span>Assessment schema</span><b>{output.document.riskAssessment.schemaVersion}</b></div>
+                <div><span>Rules version</span><b>{output.document.riskAssessment.modelVersion}</b></div>
+                <div><span>Calculated</span><b>{new Date(output.document.riskAssessment.calculatedAt).toLocaleString()}</b></div>
+                {output.document.riskAssessment.calculationTrace && <div className="fingerprint"><span>Input fingerprint</span><code>{output.document.riskAssessment.calculationTrace.inputFingerprintSha256}</code></div>}
+              </section>
+            </div>
+          </details>
         </div>}
       </section>}
       <details className="history-disclosure"><summary>Activity and passport history</summary><div className="version-list">{history.filter((item) => item.status !== "CANCELLED").map((item) => <button key={item.passportId} onClick={() => open(item, "view")}><span><b>{item.originCountry} → {item.destCountry}</b><small>{new Date(item.updatedAt).toLocaleString()}</small></span><em>{uiStatus(item.status)}</em></button>)}</div></details>
