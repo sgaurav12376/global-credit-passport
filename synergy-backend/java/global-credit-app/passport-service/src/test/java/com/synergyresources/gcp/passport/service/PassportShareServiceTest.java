@@ -34,8 +34,12 @@ class PassportShareServiceTest {
     UUID passportId = UUID.randomUUID();
     Passport passport = mock(Passport.class);
     PassportOutput output = mock(PassportOutput.class);
+    ObjectNode document = mapper.createObjectNode();
+    document.putObject("riskAssessment").putObject("calculationTrace")
+        .put("inputFingerprintSha256", "test-fingerprint");
     when(passport.getStatus()).thenReturn("ACTIVE");
     when(output.getId()).thenReturn(UUID.randomUUID());
+    when(output.getDocument()).thenReturn(document);
     when(passports.findByIdAndUserId(passportId, borrowerId)).thenReturn(Optional.of(passport));
     when(outputs.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
         .thenReturn(Optional.of(output));
