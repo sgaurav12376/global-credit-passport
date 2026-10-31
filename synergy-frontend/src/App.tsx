@@ -8,6 +8,9 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import LenderPassport from "./pages/LenderPassport";
+import LenderRequest from "./pages/LenderRequest";
+import LenderRequestStatus from "./pages/LenderRequestStatus";
+import BorrowerInvitation from "./pages/BorrowerInvitation";
 
 export default function App() {
   return (
@@ -22,6 +25,9 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/lender/passport/:token" element={<LenderPassport />} />
+      <Route path="/lender/request" element={<LenderRequest />} />
+      <Route path="/lender/request/:token" element={<LenderRequestStatus />} />
+      <Route path="/borrower/invitation/:token" element={<BorrowerInvitation />} />
       <Route path="*" element={<Navigate to="/get-started" replace />} />
     </Routes>
   );

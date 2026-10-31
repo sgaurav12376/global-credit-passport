@@ -18,7 +18,7 @@ public class CreditNormalizationAdapter
   ) {
     List<String> fields = new ArrayList<>();
     if (source.creditScore() != null) fields.add("nativeScore");
-    if (source.summary() != null) fields.add("summary");
+    if (hasStructuredSummary(source.summary())) fields.add("summary");
     if (source.tradelines() != null && !source.tradelines().isEmpty()) fields.add("accounts");
     if (source.scoreFactors() != null && !source.scoreFactors().isEmpty()) fields.add("scoreFactors");
     int completeness = fields.size() * 25;
@@ -36,6 +36,22 @@ public class CreditNormalizationAdapter
             source.dataQualityWarnings() == null ? List.of() : source.dataQualityWarnings()
         )
     );
+  }
+
+  private boolean hasStructuredSummary(NormalizedCreditReport.Summary summary) {
+    if (summary == null) return false;
+    return summary.totalAccounts() != null
+        || summary.activeAccounts() != null
+        || summary.closedAccounts() != null
+        || summary.overdueOrDefaultAccounts() != null
+        || summary.securedAccounts() != null
+        || summary.unsecuredAccounts() != null
+        || summary.currentBalance() != null
+        || summary.sanctionedAmount() != null
+        || summary.creditHistoryMonths() != null
+        || summary.recentEnquiries() != null
+        || summary.maximumDaysPastDue() != null
+        || summary.writtenOffAccounts() != null;
   }
 
   private GcpNormalized.Provenance provenance(NormalizationContext value) {

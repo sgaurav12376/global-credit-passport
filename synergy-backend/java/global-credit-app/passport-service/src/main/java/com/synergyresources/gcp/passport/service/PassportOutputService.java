@@ -17,6 +17,7 @@ import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -30,6 +31,12 @@ public class PassportOutputService {
   private final CreditBureauReconciliationService reconciliationService;
   private final DeterministicRiskAssessmentService riskAssessmentService;
   private final ObjectMapper objectMapper;
+
+  @Value("${plaid.environment:sandbox}")
+  private String plaidEnvironment = "sandbox";
+
+  @Value("${finpass.data-mode:test}")
+  private String finpassDataMode = "test";
 
   public PassportOutputService(
       PassportOutputRepo outputRepo,
@@ -61,16 +68,28 @@ public class PassportOutputService {
     List<SurepassCreditReport> surepassReports = surepassReportRepo
         .findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passport.getId())
         .stream().filter(report -> "SUCCESS".equals(report.getStatus())).toList();
-    SurepassCreditReport surepass = surepassReports.isEmpty() ? null : surepassReports.get(0);
+    boolean providerCreditAvailable = surepassReports.stream()
+        .anyMatch(report -> !isSimulatedCredit(report));
+    List<SurepassCreditReport> creditReportsForOutput = providerCreditAvailable
+        ? surepassReports.stream().filter(report -> !isSimulatedCredit(report)).toList()
+        : surepassReports;
+    SurepassCreditReport surepass = creditReportsForOutput.isEmpty()
+        ? null : creditReportsForOutput.get(0);
+    boolean simulatedCredit = !creditReportsForOutput.isEmpty()
+        && creditReportsForOutput.stream().allMatch(this::isSimulatedCredit);
+    boolean providerTestCredit = !simulatedCredit
+        && "test".equalsIgnoreCase(finpassDataMode)
+        && creditReportsForOutput.stream().anyMatch(report -> report.getConsentVersion() != null
+            && report.getConsentVersion().startsWith("finpass-"));
     var normalized = evidenceSyncService.synchronize(
-        borrowerId, passport, plaid, surepassReports, entrust
+        borrowerId, passport, plaid, creditReportsForOutput, entrust
     );
 
     ObjectNode document = objectMapper.createObjectNode();
     document.put("schemaVersion", SCHEMA_VERSION);
     document.put("passportId", passport.getId().toString());
     document.put("generatedAt", Instant.now().toString());
-    document.put("status", "PILOT_READY");
+    document.put("status", simulatedCredit ? "PILOT_SIMULATION_READY" : "PILOT_READY");
 
     ObjectNode subject = document.putObject("subject");
     subject.put("fullName", passport.getFullName());
@@ -112,7 +131,8 @@ public class PassportOutputService {
     }
     if (surepass != null) {
       ObjectNode credit = sources.putObject("creditBureau");
-      credit.put("provider", "SUREPASS");
+      credit.put("provider", simulatedCredit ? "GCP_SIMULATOR" : "SUREPASS");
+      credit.put("simulated", simulatedCredit);
       credit.put("reportId", surepass.getId().toString());
       credit.put("bureau", surepass.getBureau());
       credit.put("providerReference", surepass.getProviderReference());
@@ -131,8 +151,17 @@ public class PassportOutputService {
     ObjectNode coverage = document.putObject("coverage");
     coverage.put("identityStatusAvailable", entrust != null);
     coverage.put("openBankingAvailable", plaid != null);
+    coverage.put("openBankingSandbox", plaid != null && "sandbox".equalsIgnoreCase(plaidEnvironment));
     coverage.put("creditBureauAvailable", surepass != null);
+    coverage.put("creditBureauSimulated", simulatedCredit);
     coverage.put("sourceCount", (plaid == null ? 0 : 1) + (surepass == null ? 0 : 1));
+
+    ObjectNode evidenceEnvironment = document.putObject("evidenceEnvironment");
+    evidenceEnvironment.put("creditSimulated", simulatedCredit);
+    evidenceEnvironment.put("creditProviderTest", providerTestCredit);
+    evidenceEnvironment.put("openBankingSandbox",
+        plaid != null && "sandbox".equalsIgnoreCase(plaidEnvironment));
+    evidenceEnvironment.put("identitySandbox", sandboxIdentityPolicy);
 
     document.set("evidenceCoverage", objectMapper.valueToTree(normalized.coverage()));
     var reconciliation = reconciliationService.reconcile(normalized.evidence());
@@ -167,6 +196,12 @@ public class PassportOutputService {
     return outputRepo.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
         borrowerId, passportId
     ).orElseThrow(() -> new IllegalArgumentException("Passport output not found"));
+  }
+
+  private boolean isSimulatedCredit(SurepassCreditReport report) {
+    return "CIBIL_SIMULATED".equals(report.getBureau())
+        || (report.getConsentVersion() != null
+            && report.getConsentVersion().startsWith("gcp-local-"));
   }
 
   public record View(UUID outputId, UUID passportId, String schemaVersion,

@@ -8,6 +8,7 @@ import com.synergyresources.gcp.passport.model.PlaidFinancialSnapshot;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.surepass.NormalizedCreditReport;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -44,8 +45,7 @@ public class NormalizedEvidenceSyncService {
       EntrustVerification entrust
   ) {
     if (plaid != null) persistCashflow(borrowerId, passport, plaid);
-    creditReports.stream()
-        .filter(report -> "SUCCESS".equals(report.getStatus()))
+    currentCreditReports(creditReports).stream()
         .forEach(report -> persistCredit(borrowerId, passport, report));
     if (entrust != null) persistIdentity(borrowerId, passport, entrust);
 
@@ -55,12 +55,27 @@ public class NormalizedEvidenceSyncService {
     return new SyncResult(evidence, evidenceService.coverage(borrowerId, passport.getId()));
   }
 
+  private List<SurepassCreditReport> currentCreditReports(
+      List<SurepassCreditReport> reports
+  ) {
+    LinkedHashMap<String, SurepassCreditReport> current = new LinkedHashMap<>();
+    reports.stream()
+        .filter(report -> "SUCCESS".equals(report.getStatus()))
+        .forEach(report -> {
+          boolean simulated = isSimulated(report);
+          String key = (simulated ? "GCP_SIMULATOR:" : "SUREPASS:")
+              + report.getBureau();
+          current.putIfAbsent(key, report);
+        });
+    return List.copyOf(current.values());
+  }
+
   private void persistCashflow(
       UUID borrowerId, Passport passport, PlaidFinancialSnapshot source
   ) {
     Instant retrievedAt = time(source.getCreatedAt());
     var context = new NormalizationContext(
-        country(passport.getResidenceCountry(), passport.getDestCountry()),
+        country(passport.getDestCountry(), passport.getResidenceCountry()),
         "PLAID", "OPEN_BANKING", reference(source.getId()),
         "plaid-link-v1", retrievedAt, retrievedAt, null
     );
@@ -76,15 +91,24 @@ public class NormalizedEvidenceSyncService {
         source.getNormalizedReport(), NormalizedCreditReport.class
     );
     Instant retrievedAt = time(source.getCreatedAt());
+    boolean simulated = isSimulated(source);
     var context = new NormalizationContext(
         country(passport.getOriginCountry(), passport.getResidenceCountry()),
-        "SUREPASS", source.getBureau(), source.getProviderReference(),
+        simulated ? "GCP_SIMULATOR" : "SUREPASS",
+        source.getBureau(),
+        source.getProviderReference(),
         source.getConsentVersion(), source.getConsentedAt(), retrievedAt,
         source.getDocumentSha256()
     );
     evidenceService.saveCredit(
         borrowerId, passport.getId(), creditAdapter.normalize(report, context)
     );
+  }
+
+  private boolean isSimulated(SurepassCreditReport report) {
+    return "CIBIL_SIMULATED".equals(report.getBureau())
+        || (report.getConsentVersion() != null
+            && report.getConsentVersion().startsWith("gcp-local-"));
   }
 
   private void persistIdentity(

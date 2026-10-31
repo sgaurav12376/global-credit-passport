@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class PlaidCashflowNormalizationAdapter
     implements NormalizationAdapter<JsonNode, GcpNormalized.CashflowDataset> {
   public String adapterId() { return "plaid-cashflow"; }
-  public String adapterVersion() { return "1.1.0"; }
+  public String adapterVersion() { return "1.4.0"; }
 
   public GcpNormalized.CashflowDataset normalize(JsonNode source, NormalizationContext context) {
     List<String> fields = new ArrayList<>();

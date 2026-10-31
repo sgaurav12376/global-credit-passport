@@ -8,11 +8,13 @@ import type {
 import {
   attachPlaidConnection,
   connectPlaidItem,
+  createPlaidAccountUpdateToken,
   createPlaidLinkToken,
   getPlaidConnections,
   getPlaidFinancialSummary,
   detachPlaidConnection,
   refreshPlaidTransactions,
+  refreshPlaidAccounts,
 } from "../api/plaid";
 import type { PlaidConnectionResult, PlaidFinancialSummary } from "../api/plaid";
 
@@ -33,7 +35,7 @@ const compactButtonStyle = {
 };
 
 function institutionName(connection: PlaidConnectionResult) {
-  return connection.identityAndAccounts?.item?.institution_name || "Plaid institution";
+  return connection.identityAndAccounts?.item?.institution_name || "Financial institution";
 }
 
 function signature(connection: PlaidConnectionResult) {
@@ -74,6 +76,7 @@ export default function PlaidConnect({
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openingPlaid, setOpeningPlaid] = useState(false);
+  const [accountUpdateItemId, setAccountUpdateItemId] = useState<string | null>(null);
   const [showInsights, setShowInsights] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -106,7 +109,7 @@ export default function PlaidConnect({
       setAvailableConnections(results.filter((item) => !attachedIds.has(item.itemId)));
       if (passportConnections.length > 0 && !connected) onConnected();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to load Plaid connections.");
+      setMessage(error instanceof Error ? error.message : "Unable to load financial-account connections.");
     } finally {
       setLoading(false);
     }
@@ -123,7 +126,15 @@ export default function PlaidConnect({
       setOpeningPlaid(false);
       setMessage("Saving the new bank connection...");
       try {
-        if (!publicToken) throw new Error("Plaid did not return a public token.");
+        if (accountUpdateItemId) {
+          await refreshPlaidAccounts(accountUpdateItemId);
+          await loadConnections(passportId);
+          setSummary(null);
+          setAccountUpdateItemId(null);
+          setMessage("Account selection updated successfully.");
+          return;
+        }
+        if (!publicToken) throw new Error("The bank connection did not return a public token.");
         const resolvedPassportId = passportId || await ensurePassportId?.();
         const result = await connectPlaidItem(publicToken, resolvedPassportId);
         onConnected();
@@ -140,16 +151,17 @@ export default function PlaidConnect({
         setMessage(error instanceof Error ? error.message : "Unable to retrieve Plaid data.");
       }
     },
-    [ensurePassportId, loadConnections, onConnected, passportId]
+    [accountUpdateItemId, ensurePassportId, loadConnections, onConnected, passportId]
   );
 
   const onExit = useCallback(
     (error: PlaidLinkError | null, _metadata: PlaidLinkOnExitMetadata) => {
       setLaunchWhenReady(false);
       setOpeningPlaid(false);
+      setAccountUpdateItemId(null);
       setMessage(
         error
-          ? error.display_message || error.error_message || "Plaid Link closed with an error."
+          ? error.display_message || error.error_message || "The secure bank connection closed with an error."
           : "Bank connection was cancelled."
       );
     },
@@ -174,7 +186,22 @@ export default function PlaidConnect({
       setLaunchWhenReady(true);
     } catch (error) {
       setOpeningPlaid(false);
-      setMessage(error instanceof Error ? error.message : "Unable to start Plaid Link.");
+      setMessage(error instanceof Error ? error.message : "Unable to start the secure bank connection.");
+    }
+  }
+
+  async function updateAccountSelection(connection: PlaidConnectionResult) {
+    setOpeningPlaid(true);
+    setAccountUpdateItemId(connection.itemId);
+    setMessage(`Choose the accounts to include from ${institutionName(connection)}...`);
+    try {
+      const result = await createPlaidAccountUpdateToken(connection.itemId);
+      setLinkToken(result.linkToken);
+      setLaunchWhenReady(true);
+    } catch (error) {
+      setOpeningPlaid(false);
+      setAccountUpdateItemId(null);
+      setMessage(error instanceof Error ? error.message : "Unable to update account selection.");
     }
   }
 
@@ -251,14 +278,14 @@ export default function PlaidConnect({
   return (
     <div className={"tile " + (connections.length ? "selected" : "")} style={{ cursor: "default" }}>
       <div className="icon">🏦</div>
-      <div style={{ fontWeight: 700 }}>Bank / Open Banking</div>
+      <div style={{ fontWeight: 700 }}>U.S. financial accounts</div>
 
       {loading ? (
         <div className="hint" style={{ marginTop: 8 }}>Loading connections...</div>
       ) : connections.length ? (
         <>
           <div style={{ color: "#18794e", fontSize: 13, marginTop: 7 }}>
-            ✓ {connections.length} bank connection{connections.length === 1 ? "" : "s"}
+            ✓ {connections.length} financial institution{connections.length === 1 ? "" : "s"}
           </div>
           <div style={{ fontSize: 13, marginTop: 4 }}>
             <b>{totalAccounts}</b> accounts · <b>{totalTransactions}</b> transactions
@@ -294,7 +321,7 @@ export default function PlaidConnect({
 
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 7, marginTop: 9 }}>
             <button className="btn" type="button" style={compactButtonStyle} onClick={toggleInsights}>
-              {showInsights ? "Hide insights" : "Cash-flow insights"}
+              {showInsights ? "Hide details" : "View open-banking details"}
             </button>
             {!readOnly && <button className="btn" type="button" style={compactButtonStyle} onClick={() => setShowManage(!showManage)}>
               {showManage ? "Hide banks" : "View banks"}
@@ -334,6 +361,9 @@ export default function PlaidConnect({
                     <div>{masks || "Account masks unavailable"}</div>
                     <div>Connected {new Date(connection.createdAt).toLocaleString()}</div>
                     {duplicateSignatures.has(signature(connection)) && <div style={{ color: "#8a5a00" }}>Possible duplicate connection</div>}
+                    <button className="btn" type="button" style={{ ...compactButtonStyle, marginTop: 5, marginRight: 5 }} disabled={openingPlaid || !!busyItemId} onClick={() => updateAccountSelection(connection)}>
+                      Add or change accounts
+                    </button>
                     <button className="btn" type="button" style={{ ...compactButtonStyle, marginTop: 5 }} disabled={busyItemId === connection.itemId} onClick={() => removeConnection(connection)}>
                       Remove
                     </button>
@@ -372,7 +402,7 @@ export default function PlaidConnect({
       )}
 
       {!readOnly && <button className="btn" type="button" onClick={startPlaid} disabled={openingPlaid || !!busyItemId} style={{ marginTop: 10 }}>
-        {openingPlaid ? "Opening Plaid..." : "Connect another bank"}
+        {openingPlaid ? "Opening secure connection..." : "Connect another institution"}
       </button>}
       {message && <div style={{ fontSize: 11, marginTop: 7 }}>{message}</div>}
     </div>

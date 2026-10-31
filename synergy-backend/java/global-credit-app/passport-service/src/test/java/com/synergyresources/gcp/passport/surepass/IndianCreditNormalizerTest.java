@@ -11,6 +11,78 @@ class IndianCreditNormalizerTest {
   private final IndianCreditNormalizer normalizer = new IndianCreditNormalizer();
 
   @Test
+  void equifaxUtilizationUsesOnlyAccountsWithRevolvingCreditLimits() throws Exception {
+    var response = objectMapper.readTree("""
+        {
+          "data": {
+            "client_id": "equifax-test-reference",
+            "credit_score": "771",
+            "credit_report": {
+              "CCRResponse": {
+                "CIRReportDataLst": [{
+                  "CIRReportData": {
+                    "RetailAccountsSummary": {
+                      "NoOfAccounts": "4",
+                      "NoOfActiveAccounts": "3",
+                      "NoOfWriteOffs": "0",
+                      "TotalPastDue": "0.00",
+                      "TotalBalanceAmount": "2520460.00",
+                      "TotalCreditLimit": "85000.00"
+                    },
+                    "EnquirySummary": {"Past12Months": "1"},
+                    "RetailAccountDetails": [
+                      {
+                        "AccountNumber": "CARD0001",
+                        "AccountType": "Credit Card",
+                        "AccountStatus": "Current Account",
+                        "Balance": "6008",
+                        "HighCredit": "54212",
+                        "CreditLimit": "10000",
+                        "PastDueAmount": "0"
+                      },
+                      {
+                        "AccountNumber": "LOAN0002",
+                        "AccountType": "Personal Loan",
+                        "AccountStatus": "Current Account",
+                        "Balance": "650982",
+                        "PastDueAmount": "0"
+                      },
+                      {
+                        "AccountNumber": "CARD0003",
+                        "AccountType": "Credit Card",
+                        "AccountStatus": "Current Account",
+                        "Balance": "76925",
+                        "HighCredit": "79848",
+                        "CreditLimit": "75000",
+                        "PastDueAmount": "0"
+                      },
+                      {
+                        "AccountNumber": "CLOSED04",
+                        "AccountType": "Credit Card",
+                        "AccountStatus": "Closed Account",
+                        "Balance": "0",
+                        "HighCredit": "43599",
+                        "CreditLimit": "24000",
+                        "PastDueAmount": "0"
+                      }
+                    ]
+                  }
+                }]
+              }
+            }
+          },
+          "success": true
+        }
+        """);
+
+    NormalizedCreditReport result = normalizer.normalizeEquifax(response);
+
+    assertThat(result.summary().currentBalance()).isEqualByComparingTo("82933");
+    assertThat(result.summary().sanctionedAmount()).isEqualByComparingTo("85000");
+    assertThat(result.tradelines().get(0).sanctionedAmount()).isEqualByComparingTo("10000");
+  }
+
+  @Test
   void normalizesCrifSummaryAndMasksAccountNumber() throws Exception {
     var response = objectMapper.readTree("""
         {
@@ -89,6 +161,7 @@ class IndianCreditNormalizerTest {
                   "Account_Number": "MASKED7938",
                   "Account_Type": 13,
                   "Account_Status": 11,
+                  "Open_Date": "2020-01-10",
                   "Current_Balance": 1000,
                   "Amount_Past_Due": 0,
                   "Written_Off_Amt_Total": 0,
@@ -98,6 +171,9 @@ class IndianCreditNormalizerTest {
                     {"Year": 2023, "Month": 10, "Days_Past_Due": 26}
                   ]
                 }]
+              },
+              "TotalCAPS_Summary": {
+                "TotalCAPSLast180Days": "4"
               }
             }
           },
@@ -113,6 +189,8 @@ class IndianCreditNormalizerTest {
         new BigDecimal("122679")
     );
     assertThat(result.summary().maximumDaysPastDue()).isEqualTo(26);
+    assertThat(result.summary().recentEnquiries()).isEqualTo(4);
+    assertThat(result.summary().creditHistoryMonths()).isNotNull();
     assertThat(result.tradelines().get(0).maskedAccountNumber()).isEqualTo("****7938");
   }
 }

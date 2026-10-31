@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.time.Instant;
 import java.util.Optional;
+import java.time.Duration;
 
 @Service
 public class PassportService {
@@ -103,31 +104,58 @@ public class PassportService {
               .toList();
       passportPlaidConnectionRepo.saveAll(carriedConnections);
 
-      surepassReportRepo
-          .findFirstByBorrowerIdAndPassportIdAndStatusOrderByCreatedAtDesc(
-              userId, supersededPassport.getId(), "SUCCESS"
+      List<SurepassCreditReport> carriedCreditReports = latestSuccessfulCreditBatch(
+          surepassReportRepo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
+              userId, supersededPassport.getId()
           )
-          .ifPresent(previous -> {
-            SurepassCreditReport carried = new SurepassCreditReport();
-            carried.setBorrowerId(userId);
-            carried.setPassportId(p.getId());
-            carried.setBureau(previous.getBureau());
-            carried.setProviderReference(previous.getProviderReference());
-            carried.setCreditScore(previous.getCreditScore());
-            carried.setNormalizedReport(previous.getNormalizedReport());
-            carried.setConsentVersion(previous.getConsentVersion());
-            carried.setConsentedAt(previous.getConsentedAt());
-            carried.setStatus("SUCCESS");
-            carried.setDocumentStorageKey(previous.getDocumentStorageKey());
-            carried.setDocumentContentType(previous.getDocumentContentType());
-            carried.setDocumentSha256(previous.getDocumentSha256());
-            carried.setDocumentSizeBytes(previous.getDocumentSizeBytes());
-            carried.setInheritedFromReportId(previous.getId());
-            surepassReportRepo.save(carried);
-          });
+      ).stream().map(previous -> {
+        SurepassCreditReport carried = new SurepassCreditReport();
+        carried.setBorrowerId(userId);
+        carried.setPassportId(p.getId());
+        carried.setBureau(previous.getBureau());
+        carried.setProviderReference(previous.getProviderReference());
+        carried.setCreditScore(previous.getCreditScore());
+        carried.setNormalizedReport(previous.getNormalizedReport());
+        carried.setConsentVersion(previous.getConsentVersion());
+        carried.setConsentedAt(previous.getConsentedAt());
+        carried.setStatus("SUCCESS");
+        carried.setDocumentStorageKey(previous.getDocumentStorageKey());
+        carried.setDocumentContentType(previous.getDocumentContentType());
+        carried.setDocumentSha256(previous.getDocumentSha256());
+        carried.setDocumentSizeBytes(previous.getDocumentSizeBytes());
+        carried.setInheritedFromReportId(previous.getId());
+        return carried;
+      }).toList();
+      surepassReportRepo.saveAll(carriedCreditReports);
     }
 
     return new Dto.InitResponse(p.getId(), p.getStatus());
+  }
+
+  /**
+   * Multi-bureau responses are currently persisted as one row per bureau. The rows from one
+   * provider request are written together, while a later request can represent a different
+   * consumer. Carry forward only the newest request batch, not all historical rows and not only
+   * its final row. A five-second boundary safely groups the atomic provider write without merging
+   * separate imports.
+   */
+  private List<SurepassCreditReport> latestSuccessfulCreditBatch(
+      List<SurepassCreditReport> reports
+  ) {
+    Optional<SurepassCreditReport> latest = reports.stream()
+        .filter(report -> "SUCCESS".equals(report.getStatus()))
+        .filter(report -> report.getCreatedAt() != null)
+        .findFirst();
+    if (latest.isEmpty()) return List.of();
+
+    SurepassCreditReport anchor = latest.get();
+    return reports.stream()
+        .filter(report -> "SUCCESS".equals(report.getStatus()))
+        .filter(report -> Objects.equals(anchor.getConsentVersion(), report.getConsentVersion()))
+        .filter(report -> report.getCreatedAt() != null)
+        .filter(report -> Duration.between(report.getCreatedAt(), anchor.getCreatedAt()).abs()
+            .compareTo(Duration.ofSeconds(5)) <= 0)
+        .toList();
   }
 
   @Transactional

@@ -43,6 +43,12 @@ surepass:
   document-directory: ${SUREPASS_DOCUMENT_DIRECTORY:./data/surepass-reports}
   max-document-bytes: ${SUREPASS_MAX_DOCUMENT_BYTES:20971520}
 
+finpass:
+  enabled: ${FINPASS_ENABLED:false}
+  base-url: ${FINPASS_BASE_URL:https://api.finpass.ai}
+  api-key: ${FINPASS_API_KEY:}
+  api-secret: ${FINPASS_API_SECRET:}
+
 entrust:
   enabled: ${ENTRUST_ENABLED:false}
   base-url: ${ENTRUST_BASE_URL:https://api.us.onfido.com}

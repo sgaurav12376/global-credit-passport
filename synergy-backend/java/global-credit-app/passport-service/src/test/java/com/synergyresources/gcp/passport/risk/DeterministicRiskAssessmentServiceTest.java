@@ -23,7 +23,7 @@ class DeterministicRiskAssessmentServiceTest {
         {"nativeScore":{"value":700,"minimum":300,"maximum":900,"model":"CRIF"},
          "summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
          "writtenOffAccounts":0,"currentBalance":1200,"sanctionedAmount":100000,
-         "creditHistoryMonths":72}}
+         "creditHistoryMonths":72,"recentEnquiries":2}}
         """);
     NormalizedEvidence cashflow = evidence("CASHFLOW", 83, """
         {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
@@ -39,7 +39,9 @@ class DeterministicRiskAssessmentServiceTest {
 
     assertEquals("CALCULATED", result.status());
     assertNotNull(result.riskIndex());
-    assertEquals(6, result.dimensions().stream().filter(RiskAssessment.Dimension::available).count());
+    assertEquals("GCP_RISK_ASSESSMENT_V6", result.schemaVersion());
+    assertEquals("GCP_RULES_V1_6", result.modelVersion());
+    assertEquals(7, result.dimensions().stream().filter(RiskAssessment.Dimension::available).count());
     assertTrue(result.confidence().score() < result.riskIndex());
     assertEquals(25, result.confidence().identityAssuranceComponent());
     assertEquals(100, result.confidence().analyticalAvailabilityComponent());
@@ -48,6 +50,19 @@ class DeterministicRiskAssessmentServiceTest {
     assertEquals(100, result.calculationTrace().availableConfiguredWeight());
     assertEquals(3, result.calculationTrace().evidence().size());
     assertEquals(64, result.calculationTrace().inputFingerprintSha256().length());
+    assertEquals(67, result.nativeScoreReferences().get(0).rangePositionPercent());
+    assertEquals("STANDARD_REVIEW", result.reviewGuidance().reviewPriority());
+    assertEquals("CREDIT_AND_CASHFLOW", result.reviewGuidance().assessmentBasis());
+    assertTrue(result.reviewGuidance().lenderDecisionRequired());
+    assertTrue(result.keyDrivers().stream().anyMatch(
+        driver -> "RECENT_CREDIT_ENQUIRIES".equals(driver.dimensionKey())
+    ));
+    assertEquals(7, result.dimensionExplanations().size());
+    assertEquals("1.2", result.dimensionExplanations().stream()
+        .filter(item -> "CREDIT_UTILIZATION".equals(item.dimensionKey()))
+        .findFirst().orElseThrow().observedValue());
+    assertTrue(result.crossBorderContext().nativeScoreScalesPreserved());
+    assertTrue(result.crossBorderContext().evidenceCountries().contains("IN"));
   }
 
   @Test
@@ -81,13 +96,79 @@ class DeterministicRiskAssessmentServiceTest {
         new CreditBureauReconciliationService().reconcile(all)
     );
 
-    assertEquals(50, result.confidence().analyticalAvailabilityComponent());
+    assertEquals(47, result.confidence().analyticalAvailabilityComponent());
     assertEquals("MEDIUM", result.confidence().band());
-    assertEquals(50, result.calculationTrace().availableConfiguredWeight());
+    assertEquals(47, result.calculationTrace().availableConfiguredWeight());
     assertEquals(100, result.calculationTrace().totalConfiguredWeight());
     assertEquals("POSITIVE_ANALYZED_INCOME_UNAVAILABLE", result.dimensions().stream()
         .filter(dimension -> "INCOME_STABILITY".equals(dimension.key()))
         .findFirst().orElseThrow().reasonCodes().get(0));
+  }
+
+  @Test
+  void capsConfidenceWhenAnalyticalAvailabilityOrIdentityAssuranceIsLimited() throws Exception {
+    NormalizedEvidence credit = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+         "writtenOffAccounts":0,"currentBalance":20000,"sanctionedAmount":200000,
+         "creditHistoryMonths":120,"recentEnquiries":1}}
+        """);
+    NormalizedEvidence cashflow = evidence("CASHFLOW", 83,
+        "{\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
+    NormalizedEvidence identity = evidence("IDENTITY", 100,
+        "{\"status\":\"DECLINED\",\"verified\":false}");
+    List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals(96, result.riskIndex());
+    assertEquals(55, result.confidence().analyticalAvailabilityComponent());
+    assertEquals(25, result.confidence().identityAssuranceComponent());
+    assertEquals(69, result.confidence().score());
+    assertEquals("MEDIUM", result.confidence().band());
+  }
+
+  @Test
+  void scoresRecentCreditSeekingWithoutTreatingItAsADeclineDecision() throws Exception {
+    NormalizedEvidence credit = evidence("CREDIT", 75, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+         "writtenOffAccounts":0,"recentEnquiries":8,"creditHistoryMonths":48}}
+        """);
+    List<NormalizedEvidence> all = List.of(credit);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    RiskAssessment.Dimension enquiries = result.dimensions().stream()
+        .filter(item -> "RECENT_CREDIT_ENQUIRIES".equals(item.key()))
+        .findFirst().orElseThrow();
+    assertEquals(30, enquiries.score());
+    assertEquals("RECENT_ENQUIRIES_8", enquiries.reasonCodes().get(0));
+    assertTrue(result.reviewGuidance().lenderDecisionRequired());
+  }
+
+  @Test
+  void identifiesDataGapsAndRecommendsAdditionalEvidence() throws Exception {
+    NormalizedEvidence identity = evidence("IDENTITY", 100,
+        "{\"status\":\"APPROVED\",\"verified\":true}");
+    List<NormalizedEvidence> all = List.of(identity);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals("DATA_REQUIRED", result.reviewGuidance().reviewPriority());
+    assertEquals("LIMITED_EVIDENCE", result.reviewGuidance().assessmentBasis());
+    assertTrue(result.reviewGuidance().recommendedActions()
+        .contains("REQUEST_VERIFIED_CREDIT_EVIDENCE"));
+    assertTrue(result.reviewGuidance().recommendedActions()
+        .contains("REQUEST_CONSENTED_CASHFLOW_EVIDENCE"));
+    assertEquals(7, result.reviewGuidance().dataGaps().size());
   }
 
   @Test
@@ -103,6 +184,88 @@ class DeterministicRiskAssessmentServiceTest {
     assertEquals("INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY", result.dimensions().stream()
         .filter(dimension -> "INCOME_STABILITY".equals(dimension.key()))
         .findFirst().orElseThrow().reasonCodes().get(0));
+  }
+
+  @Test
+  void selectsCompleteCibilRecordDeterministicallyAndExposesFactorSource() throws Exception {
+    NormalizedEvidence equifax = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"currentBalance":35000,"sanctionedAmount":200000,
+        "creditHistoryMonths":96,"recentEnquiries":1}}
+        """);
+    equifax.setSourceSystem("EQUIFAX");
+    NormalizedEvidence cibil = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"currentBalance":34000,"sanctionedAmount":200000,
+        "creditHistoryMonths":96,"recentEnquiries":2}}
+        """);
+    cibil.setSourceSystem("CIBIL");
+    List<NormalizedEvidence> all = List.of(equifax, cibil);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals("CIBIL", result.assessmentEvidence().sourceSystem());
+    assertEquals("CIBIL", result.dimensionExplanations().stream()
+        .filter(item -> "CREDIT_UTILIZATION".equals(item.dimensionKey()))
+        .findFirst().orElseThrow().sourceSystem());
+    assertEquals("17.0", result.dimensionExplanations().stream()
+        .filter(item -> "CREDIT_UTILIZATION".equals(item.dimensionKey()))
+        .findFirst().orElseThrow().observedValue());
+  }
+
+  @Test
+  void capsConfidenceWhenSelectedAssessmentEvidenceIsSynthetic() throws Exception {
+    NormalizedEvidence credit = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"currentBalance":34000,"sanctionedAmount":200000,
+        "creditHistoryMonths":96,"recentEnquiries":2}}
+        """);
+    credit.setProvider("GCP_SIMULATOR");
+    credit.setSourceSystem("CIBIL_SIMULATED");
+    NormalizedEvidence cashflow = evidence("CASHFLOW", 100, """
+        {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
+        "averageMonthlyNetCashflow":1800,"incomeStabilityPercent":100}}
+        """);
+    NormalizedEvidence identity = evidence("IDENTITY", 100,
+        "{\"status\":\"APPROVED\",\"verified\":true}");
+    List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals(69, result.confidence().score());
+    assertEquals("MEDIUM", result.confidence().band());
+  }
+
+  @Test
+  void prefersProviderCreditEvidenceOverSyntheticCreditEvidence() throws Exception {
+    NormalizedEvidence synthetic = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"currentBalance":10000,"sanctionedAmount":100000,
+        "creditHistoryMonths":120,"recentEnquiries":1}}
+        """);
+    synthetic.setProvider("GCP_SIMULATOR");
+    synthetic.setSourceSystem("CIBIL_SIMULATED");
+    NormalizedEvidence provider = evidence("CREDIT", 90, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"currentBalance":30000,"sanctionedAmount":100000,
+        "creditHistoryMonths":72,"recentEnquiries":2}}
+        """);
+    provider.setProvider("FINPASS");
+    provider.setSourceSystem("EQUIFAX");
+    List<NormalizedEvidence> all = List.of(synthetic, provider);
+
+    RiskAssessment result = service.assess(
+        all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all)
+    );
+
+    assertEquals("EQUIFAX", result.assessmentEvidence().sourceSystem());
   }
 
   private NormalizedEvidence evidence(String domain, int completeness, String json) throws Exception {

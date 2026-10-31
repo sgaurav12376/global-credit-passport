@@ -1,7 +1,9 @@
 package com.synergyresources.gcp.passport.service;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -16,6 +18,8 @@ import com.synergyresources.gcp.passport.model.PassportShareGrant;
 import com.synergyresources.gcp.passport.repo.PassportOutputRepo;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportShareGrantRepo;
+import com.synergyresources.gcp.passport.repo.LenderReviewEventRepo;
+import org.springframework.context.ApplicationEventPublisher;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +48,10 @@ class PassportShareServiceTest {
     when(outputs.findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
         .thenReturn(Optional.of(output));
     when(shares.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
-    PassportShareService service = new PassportShareService(shares, passports, outputs, mapper);
+    PassportShareService service = new PassportShareService(
+        shares, mock(LenderReviewEventRepo.class), passports, outputs, mapper,
+        mock(ApplicationEventPublisher.class)
+    );
 
     var result = service.create(borrowerId, passportId,
         new PassportShareService.CreateShare("Pilot Lender", "Loan review", 7, true));
@@ -89,12 +96,147 @@ class PassportShareServiceTest {
     when(shares.findByTokenHash(any())).thenReturn(Optional.of(grant));
     when(outputs.findByIdAndBorrowerIdAndPassportId(outputId, borrowerId, passportId))
         .thenReturn(Optional.of(output));
-    PassportShareService service = new PassportShareService(shares, passports, outputs, mapper);
+    PassportShareService service = new PassportShareService(
+        shares, mock(LenderReviewEventRepo.class), passports, outputs, mapper,
+        mock(ApplicationEventPublisher.class)
+    );
 
     var result = service.open("valid-capability-token");
 
     assertTrue(result.report().has("riskAssessment"));
     assertFalse(result.report().has("normalizedEvidence"));
     assertFalse(result.report().has("verifiedSources"));
+  }
+
+  @Test
+  void lenderCanCompleteReviewWithOutcomeAndPrivateNote() {
+    PassportShareGrantRepo shares = mock(PassportShareGrantRepo.class);
+    LenderReviewEventRepo events = mock(LenderReviewEventRepo.class);
+    PassportShareGrant grant = mock(PassportShareGrant.class);
+    when(grant.getExpiresAt()).thenReturn(Instant.now().plusSeconds(3600));
+    when(grant.getReviewStatus()).thenReturn("UNDER_REVIEW");
+    when(shares.findByTokenHash(any())).thenReturn(Optional.of(grant));
+    when(shares.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    PassportShareService service = new PassportShareService(
+        shares, events, mock(PassportRepo.class), mock(PassportOutputRepo.class), mapper,
+        mock(ApplicationEventPublisher.class)
+    );
+
+    service.updateReview("valid-capability-token", new PassportShareService.UpdateReview(
+        "COMPLETED", "PROCEED", "We will contact you about next steps.", "Internal policy note"
+    ));
+
+    verify(grant).setReviewStatus("COMPLETED");
+    verify(grant).setReviewOutcome("PROCEED");
+    verify(grant).setBorrowerMessage("We will contact you about next steps.");
+    verify(grant).setInternalNote("Internal policy note");
+    verify(events).save(any());
+  }
+
+  @Test
+  void informationRequestRequiresBorrowerVisibleMessage() {
+    PassportShareGrantRepo shares = mock(PassportShareGrantRepo.class);
+    PassportShareGrant grant = mock(PassportShareGrant.class);
+    when(grant.getExpiresAt()).thenReturn(Instant.now().plusSeconds(3600));
+    when(grant.getReviewStatus()).thenReturn("VIEWED");
+    when(shares.findByTokenHash(any())).thenReturn(Optional.of(grant));
+    PassportShareService service = new PassportShareService(
+        shares, mock(LenderReviewEventRepo.class), mock(PassportRepo.class),
+        mock(PassportOutputRepo.class), mapper, mock(ApplicationEventPublisher.class)
+    );
+
+    assertThrows(IllegalArgumentException.class, () -> service.updateReview(
+        "valid-capability-token",
+        new PassportShareService.UpdateReview("INFORMATION_REQUESTED", null, null, null)
+    ));
+  }
+
+  @Test
+  void borrowerCanRespondToActiveInformationRequest() {
+    PassportShareGrantRepo shares = mock(PassportShareGrantRepo.class);
+    LenderReviewEventRepo events = mock(LenderReviewEventRepo.class);
+    PassportShareGrant grant = mock(PassportShareGrant.class);
+    UUID borrowerId = UUID.randomUUID();
+    UUID passportId = UUID.randomUUID();
+    UUID shareId = UUID.randomUUID();
+    when(grant.getId()).thenReturn(shareId);
+    when(grant.getPassportId()).thenReturn(passportId);
+    when(grant.getExpiresAt()).thenReturn(Instant.now().plusSeconds(3600));
+    when(grant.getReviewStatus()).thenReturn("INFORMATION_REQUESTED");
+    when(grant.getBorrowerMessage()).thenReturn("Please provide recent payslips.");
+    when(shares.findByIdAndBorrowerId(shareId, borrowerId)).thenReturn(Optional.of(grant));
+    when(shares.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    PassportShareService service = new PassportShareService(
+        shares, events, mock(PassportRepo.class), mock(PassportOutputRepo.class), mapper,
+        mock(ApplicationEventPublisher.class)
+    );
+
+    service.respond(borrowerId, passportId, shareId,
+        new PassportShareService.BorrowerResponseRequest("I have uploaded the requested records."));
+
+    verify(grant).setBorrowerResponse("I have uploaded the requested records.");
+    verify(grant).setBorrowerRespondedAt(any());
+    verify(grant).setReviewStatus("UNDER_REVIEW");
+    verify(events).save(any());
+  }
+
+  @Test
+  void borrowerCanReplaceActiveLinkWithoutCreatingANewShare() {
+    PassportShareGrantRepo shares = mock(PassportShareGrantRepo.class);
+    LenderReviewEventRepo events = mock(LenderReviewEventRepo.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    PassportShareGrant grant = mock(PassportShareGrant.class);
+    UUID borrowerId = UUID.randomUUID();
+    UUID passportId = UUID.randomUUID();
+    UUID shareId = UUID.randomUUID();
+    Instant expiresAt = Instant.now().plusSeconds(3600);
+    when(grant.getId()).thenReturn(shareId);
+    when(grant.getPassportId()).thenReturn(passportId);
+    when(grant.getExpiresAt()).thenReturn(expiresAt);
+    when(grant.getReviewStatus()).thenReturn("UNDER_REVIEW");
+    when(grant.getRecipientName()).thenReturn("Pilot Lender");
+    when(grant.getPurpose()).thenReturn("Loan review");
+    when(shares.findByIdAndBorrowerId(shareId, borrowerId)).thenReturn(Optional.of(grant));
+    when(shares.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    PassportShareService service = new PassportShareService(
+        shares, events, mock(PassportRepo.class), mock(PassportOutputRepo.class), mapper, publisher
+    );
+
+    Instant beforeReplacement = Instant.now();
+    var replacement = service.replaceLink(
+        borrowerId, passportId, shareId, new PassportShareService.ReplaceLinkRequest(14));
+
+    ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
+    verify(grant).setTokenHash(hash.capture());
+    assertTrue(hash.getValue().matches("[0-9a-f]{64}"));
+    assertNotEquals(replacement.token(), hash.getValue());
+    assertEquals(shareId, replacement.shareId());
+    ArgumentCaptor<Instant> renewedExpiry = ArgumentCaptor.forClass(Instant.class);
+    verify(grant).setExpiresAt(renewedExpiry.capture());
+    assertTrue(renewedExpiry.getValue().isAfter(beforeReplacement.plusSeconds(13L * 24 * 3600)));
+    verify(grant).setConsentedAt(any());
+    verify(shares).saveAndFlush(grant);
+    verify(events).save(any());
+    verify(publisher).publishEvent(any(ReviewChangedEvent.class));
+  }
+
+  @Test
+  void cannotReplaceExpiredLink() {
+    PassportShareGrantRepo shares = mock(PassportShareGrantRepo.class);
+    PassportShareGrant grant = mock(PassportShareGrant.class);
+    UUID borrowerId = UUID.randomUUID();
+    UUID passportId = UUID.randomUUID();
+    UUID shareId = UUID.randomUUID();
+    when(grant.getPassportId()).thenReturn(passportId);
+    when(grant.getExpiresAt()).thenReturn(Instant.now().minusSeconds(1));
+    when(shares.findByIdAndBorrowerId(shareId, borrowerId)).thenReturn(Optional.of(grant));
+    PassportShareService service = new PassportShareService(
+        shares, mock(LenderReviewEventRepo.class), mock(PassportRepo.class),
+        mock(PassportOutputRepo.class), mapper, mock(ApplicationEventPublisher.class)
+    );
+
+    assertThrows(IllegalStateException.class,
+        () -> service.replaceLink(
+            borrowerId, passportId, shareId, new PassportShareService.ReplaceLinkRequest(7)));
   }
 }

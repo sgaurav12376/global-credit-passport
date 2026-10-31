@@ -58,6 +58,14 @@ function mapPurpose(p: string | null): string {
   }
 }
 
+const localSandboxIdentityPolicy =
+  (import.meta.env.VITE_AUTH_MODE || "cognito") === "local";
+
+function identityStatusReady(status?: string | null) {
+  return status === "ENTRUST_APPROVED" || status === "PILOT_COMPLETED"
+    || (localSandboxIdentityPolicy && status === "ENTRUST_DECLINED");
+}
+
 export default function PassportInit() {
   const nav = useNavigate();
 
@@ -76,6 +84,9 @@ export default function PassportInit() {
   const [entrustStarted, setEntrustStarted] = useState(false);
   const [entrustCompleted, setEntrustCompleted] = useState(false);
   const [entrustVerification, setEntrustVerification] = useState<EntrustVerification | null>(null);
+  const [identityStatus, setIdentityStatus] = useState<string | null | undefined>(
+    () => loadInit().identityStatus
+  );
   const [mode, setMode] = useState<"view" | "edit">(() => loadInit().mode || "edit");
   const [supersedesPassportId, setSupersedesPassportId] = useState<string | undefined>(
     () => loadInit().supersedesPassportId
@@ -89,12 +100,14 @@ export default function PassportInit() {
   const init = useMemo(() => loadInit(), []);
   const readOnly = mode === "view";
   const sandboxIdentityReady = entrustVerification?.status === "APPROVED"
-    || entrustVerification?.status === "DECLINED";
+    || (localSandboxIdentityPolicy && entrustVerification?.status === "DECLINED")
+    || identityStatusReady(identityStatus);
 
   function identityDetailsChanged() {
     setEntrustVerification(null);
     setEntrustStarted(false);
     setEntrustCompleted(false);
+    setIdentityStatus("REQUIRES_REVERIFICATION");
     setSaveMessage(null);
   }
 
@@ -125,9 +138,8 @@ export default function PassportInit() {
       setBank(!!init.sources?.bank);
       setPassportId(init.passportId);
       setSupersedesPassportId(init.supersedesPassportId);
-      setEntrustCompleted(
-        init.identityStatus === "ENTRUST_APPROVED" || init.identityStatus === "PILOT_COMPLETED"
-      );
+      setIdentityStatus(init.identityStatus);
+      setEntrustCompleted(identityStatusReady(init.identityStatus));
 
       if (init.startStep) {
         setStep(init.startStep);
@@ -180,9 +192,8 @@ export default function PassportInit() {
       identityStatus: saved.identityStatus,
       identityCompletedAt: saved.identityCompletedAt,
     });
-    setEntrustCompleted(
-      saved.identityStatus === "ENTRUST_APPROVED" || saved.identityStatus === "PILOT_COMPLETED"
-    );
+    setIdentityStatus(saved.identityStatus);
+    setEntrustCompleted(identityStatusReady(saved.identityStatus));
     setSaveMessage("Saved to your passport");
     return saved;
   }
@@ -233,7 +244,7 @@ export default function PassportInit() {
     }
 
     if (!sandboxIdentityReady) {
-      setErr("Complete the Entrust sandbox verification before continuing.");
+      setErr("Complete the pilot identity verification before continuing.");
       return;
     }
 
@@ -283,13 +294,14 @@ export default function PassportInit() {
       const resolvedPassportId = await ensurePassportId();
       await saveDetails(resolvedPassportId);
       const result = await startEntrust(resolvedPassportId);
-      if (!result?.captureUrl) throw new Error("Entrust did not return a verification link.");
+      if (!result?.captureUrl) throw new Error("The identity service did not return a verification link.");
       setEntrustVerification(result);
       setEntrustStarted(true);
+      setIdentityStatus(`ENTRUST_${result.status}`);
       if (captureWindow) {
         captureWindow.location.href = result.captureUrl;
       } else {
-        setErr("Your browser blocked the Entrust window. Allow pop-ups and select Reopen Entrust verification.");
+        setErr("Your browser blocked the identity-verification window. Allow pop-ups and select Reopen verification.");
       }
     } catch (error) {
       captureWindow?.close();
@@ -304,11 +316,16 @@ export default function PassportInit() {
     try {
       const result = await refreshEntrustVerification(passportId);
       setEntrustVerification(result);
-      const approved = result?.status === "APPROVED";
-      setEntrustCompleted(approved);
-      if (approved) {
-        persistInProgress({ identityStatus: "ENTRUST_APPROVED", identityCompletedAt: result.completedAt });
-        setSaveMessage("Identity verified by Entrust");
+      const recorded = result?.status === "APPROVED"
+        || (localSandboxIdentityPolicy && result?.status === "DECLINED");
+      const nextIdentityStatus = result?.status ? `ENTRUST_${result.status}` : identityStatus;
+      setIdentityStatus(nextIdentityStatus);
+      setEntrustCompleted(recorded);
+      if (recorded) {
+        persistInProgress({ identityStatus: nextIdentityStatus, identityCompletedAt: result.completedAt });
+        setSaveMessage(result?.status === "APPROVED"
+          ? "Identity verified"
+          : "Pilot identity result recorded");
       }
     } catch (error) {
       setErr(error instanceof Error ? error.message : "Unable to check identity status.");
@@ -322,7 +339,9 @@ export default function PassportInit() {
         if (!result) return;
         setEntrustVerification(result);
         setEntrustStarted(true);
-        setEntrustCompleted(result.status === "APPROVED");
+        setIdentityStatus(`ENTRUST_${result.status}`);
+        setEntrustCompleted(result.status === "APPROVED"
+          || (localSandboxIdentityPolicy && result.status === "DECLINED"));
       })
       .catch(() => undefined);
   }, [passportId]);
@@ -336,10 +355,12 @@ export default function PassportInit() {
 
       // 1) reuse the draft created for provider connections, or create it now
       const resolvedPassportId = await ensurePassportId();
-      await saveDetails(resolvedPassportId);
-      if (!sandboxIdentityReady) {
+      const saved = await saveDetails(resolvedPassportId);
+      const identityReadyToPublish = sandboxIdentityReady
+        || identityStatusReady(saved.identityStatus);
+      if (!identityReadyToPublish) {
         setStep(2);
-        throw new Error("Complete the Entrust sandbox verification before publishing this passport.");
+        throw new Error("Complete the pilot identity verification before publishing this passport.");
       }
 
       // 2) connect sources (based on toggles)
@@ -370,8 +391,8 @@ export default function PassportInit() {
       saveInit(next);
 
       nav("/dashboard");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to create passport");
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Failed to create passport");
     } finally {
       setLoading(false);
     }
@@ -544,7 +565,7 @@ export default function PassportInit() {
             <div style={{ marginTop: 14 }}>
               <h3 className="task-title">Verify that this information belongs to you</h3>
               <div className="hint" style={{ textAlign: "left" }}>
-                Enter your basic profile details, then complete secure identity verification through Entrust.
+                Enter your basic profile details, then complete a secure identity verification.
               </div>
 
               <div className="label">Full Name</div>
@@ -606,7 +627,7 @@ export default function PassportInit() {
                     marginTop: 6,
                   }}
                 >
-                  Complete a secure identity check. Entrust performs the verification for GCP.
+                  Complete a secure identity check for your Global Credit Passport.
                 </div>
 
                 {!entrustCompleted && <button
@@ -617,8 +638,8 @@ export default function PassportInit() {
                   style={{ marginTop: 12 }}
                 >
                   {entrustStarted
-                    ? "Reopen Entrust verification"
-                    : "Verify identity with Entrust"}
+                    ? "Reopen identity verification"
+                    : "Verify identity"}
                 </button>}
 
                 {entrustStarted && !entrustCompleted && (
@@ -627,7 +648,7 @@ export default function PassportInit() {
                       className="hint"
                       style={{ textAlign: "left" }}
                     >
-                      Complete the Entrust steps in the opened tab, then return here and check the result.
+                      Complete the identity steps in the opened tab, then return here and check the result.
                     </div>
 
                     <button
@@ -641,17 +662,17 @@ export default function PassportInit() {
                     </button>
                     {entrustVerification?.status === "PROCESSING" && (
                       <div className="hint" style={{ textAlign: "left", marginTop: 8 }}>
-                        Entrust is processing your verification.
+                        Your identity verification is being processed.
                       </div>
                     )}
                     {entrustVerification?.status === "DECLINED" && (
                       <div style={{ color: "#7a5d00", fontSize: 13, marginTop: 8 }}>
-                        Entrust returned a declined sandbox result. The result is recorded and you may continue the pilot.
+                        The sandbox identity check returned a declined result. It is recorded and you may continue the pilot.
                       </div>
                     )}
                     {entrustVerification?.status === "ERROR" && (
                       <div style={{ color: "#b42318", fontSize: 13, marginTop: 8 }}>
-                        Entrust could not complete the verification{entrustVerification.providerError ? `: ${entrustVerification.providerError}` : "."}
+                        The identity service could not complete the verification{entrustVerification.providerError ? `: ${entrustVerification.providerError}` : "."}
                       </div>
                     )}
                   </div>
@@ -665,7 +686,9 @@ export default function PassportInit() {
                       marginTop: 12,
                     }}
                   >
-                    ✓ Identity verified by Entrust
+                    {identityStatus === "ENTRUST_DECLINED"
+                      ? "✓ Pilot identity result retained"
+                      : "✓ Identity verified"}
                   </div>
                 )}
               </div>

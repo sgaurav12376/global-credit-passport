@@ -70,6 +70,27 @@ class NormalizedEvidenceServiceTest {
     assertEquals(50, current.get(0).getCompletenessPercent());
   }
 
+  @Test
+  void multiBureauSimulationSupersedesLegacyCollapsedSimulationEvidence() {
+    UUID borrowerId = UUID.randomUUID();
+    UUID passportId = UUID.randomUUID();
+    NormalizedEvidenceRepo repo = mock(NormalizedEvidenceRepo.class);
+    NormalizedEvidence equifax = evidence("CREDIT", "IN", "GCP_SIMULATOR", "EQUIFAX", 100);
+    NormalizedEvidence experian = evidence("CREDIT", "IN", "GCP_SIMULATOR", "EXPERIAN", 100);
+    NormalizedEvidence legacy = evidence("CREDIT", "IN", "GCP_SIMULATOR", "CIBIL_SIMULATED", 100);
+    when(repo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, passportId))
+        .thenReturn(List.of(equifax, experian, legacy));
+    NormalizedEvidenceService service = new NormalizedEvidenceService(
+        repo, new EvidenceCoverageCalculator(), new ObjectMapper().findAndRegisterModules()
+    );
+
+    List<NormalizedEvidence> current = service.currentEvidence(borrowerId, passportId);
+
+    assertEquals(2, current.size());
+    assertEquals(List.of("EQUIFAX", "EXPERIAN"), current.stream()
+        .map(NormalizedEvidence::getSourceSystem).toList());
+  }
+
   private NormalizedEvidence evidence(
       String domain, String country, String provider, String source, int completeness
   ) {

@@ -85,6 +85,10 @@ class PassportOutputServiceTest {
     ObjectNode document = (ObjectNode) output.getDocument();
     assertEquals("GCP_PILOT_V1", document.path("schemaVersion").asText());
     assertEquals(2, document.path("coverage").path("sourceCount").asInt());
+    assertEquals(true, document.path("evidenceEnvironment").path("openBankingSandbox").asBoolean());
+    assertEquals(true, document.path("evidenceEnvironment").path("identitySandbox").asBoolean());
+    assertEquals(false, document.path("evidenceEnvironment").path("creditSimulated").asBoolean());
+    assertEquals(false, document.path("evidenceEnvironment").path("creditProviderTest").asBoolean());
     assertEquals("DECLINED",
         document.path("identityVerification").path("status").asText());
     assertFalse(document.path("identityVerification").path("approvalRequiredForPilot").asBoolean());
@@ -95,8 +99,10 @@ class PassportOutputServiceTest {
     assertEquals(71, document.path("evidenceCoverage").path("coveragePercent").asInt());
     assertEquals("GCP_CREDIT_RECONCILIATION_V1",
         document.path("creditReconciliation").path("schemaVersion").asText());
-    assertEquals("GCP_RISK_ASSESSMENT_V2",
+    assertEquals("GCP_RISK_ASSESSMENT_V6",
         document.path("riskAssessment").path("schemaVersion").asText());
+    assertEquals("GCP_RULES_V1_6",
+        document.path("riskAssessment").path("modelVersion").asText());
     assertEquals("WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS", document.path("riskAssessment")
         .path("calculationTrace").path("aggregationMethod").asText());
     assertEquals(64, document.path("riskAssessment").path("calculationTrace")

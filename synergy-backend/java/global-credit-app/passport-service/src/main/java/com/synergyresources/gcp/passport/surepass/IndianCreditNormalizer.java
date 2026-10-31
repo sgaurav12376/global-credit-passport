@@ -7,6 +7,7 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -25,16 +26,28 @@ public class IndianCreditNormalizer {
     JsonNode summary = report.path("RetailAccountsSummary");
     JsonNode enquiries = report.path("EnquirySummary");
     List<NormalizedCreditReport.Tradeline> tradelines = new ArrayList<>();
+    BigDecimal revolvingBalance = BigDecimal.ZERO;
+    BigDecimal revolvingLimit = BigDecimal.ZERO;
+    boolean hasRevolvingLimit = false;
     for (JsonNode account : arrayOrSingleton(report.path("RetailAccountDetails"))) {
+      BigDecimal balance = money(account, "Balance");
+      BigDecimal creditLimit = money(account, "CreditLimit");
+      String accountStatus = text(account, "AccountStatus");
+      if (creditLimit != null && creditLimit.signum() > 0
+          && !isClosedAccount(accountStatus)) {
+        hasRevolvingLimit = true;
+        revolvingLimit = revolvingLimit.add(creditLimit);
+        if (balance != null) revolvingBalance = revolvingBalance.add(balance);
+      }
       tradelines.add(new NormalizedCreditReport.Tradeline(
           mask(account.path("AccountNumber").asText(null)),
           text(account, "AccountType"),
-          text(account, "AccountStatus"),
-          money(account, "Balance"),
-          firstMoney(account, "HighCredit", "CreditLimit"),
+          accountStatus,
+          balance,
+          firstMoney(account, "CreditLimit", "HighCredit"),
           money(account, "PastDueAmount"),
           null,
-          null,
+          maxEquifaxDpd(account.path("History48Months")),
           text(account, "DateOpened"),
           text(account, "DateReported")
       ));
@@ -47,10 +60,17 @@ public class IndianCreditNormalizer {
       }
     }
     List<String> warnings = new ArrayList<>();
-    warnings.add("Equifax payment-history DPD was not present in the supplied payload");
+    if (maxTradelineDpd(tradelines) == null) {
+      warnings.add("Equifax payment-history DPD was not present in the supplied payload");
+    }
     Integer total = integer(summary, "NoOfAccounts");
     if (total != null && total != tradelines.size()) {
       warnings.add("Bureau summary and detailed account counts differ");
+    }
+    if (!hasRevolvingLimit) {
+      warnings.add(
+          "Equifax detailed accounts did not provide revolving credit limits; utilization is unavailable"
+      );
     }
     return new NormalizedCreditReport(
         "EQUIFAX", text(data, "client_id"), integer(data, "credit_score"), 300, 900,
@@ -59,8 +79,10 @@ public class IndianCreditNormalizer {
             total, integer(summary, "NoOfActiveAccounts"),
             subtract(total, integer(summary, "NoOfActiveAccounts")),
             positiveAsCount(money(summary, "TotalPastDue")), null, null,
-            money(summary, "TotalBalanceAmount"), money(summary, "TotalCreditLimit"),
-            null, integer(enquiries, "Past12Months"), null,
+            hasRevolvingLimit ? revolvingBalance : null,
+            hasRevolvingLimit ? revolvingLimit : null,
+            oldestCreditHistoryMonths(tradelines), integer(enquiries, "Past12Months"),
+            maxTradelineDpd(tradelines),
             integer(summary, "NoOfWriteOffs")
         ),
         List.copyOf(tradelines), List.copyOf(warnings)
@@ -108,13 +130,27 @@ public class IndianCreditNormalizer {
         integer(derived, "LENGTH-OF-CREDIT-HISTORY-MONTH")
     );
 
+    Integer score = integer(data, "credit_score");
+    JsonNode scoreNode = report.path("SCORES").path("SCORE");
+    String scoreType = text(scoreNode, "SCORE-TYPE");
+    Integer scoreMinimum = isConventionalIndianBureauScore(score) ? 300 : null;
+    Integer scoreMaximum = isConventionalIndianBureauScore(score) ? 900 : null;
+    if (scoreType != null) {
+      warnings.add("CRIF native score model: " + scoreType);
+    }
+    if (score != null && scoreMinimum == null) {
+      warnings.add(
+          "CRIF native score range was not supplied; the score is preserved without 300-900 mapping"
+      );
+    }
+
     return new NormalizedCreditReport(
         "CRIF",
         text(data, "client_id"),
-        integer(data, "credit_score"),
-        300,
-        900,
-        List.of(),
+        score,
+        scoreMinimum,
+        scoreMaximum,
+        scoreType == null ? List.of() : List.of("Native model: " + scoreType),
         new NormalizedCreditReport.Summary(
             total,
             integer(primary, "PRIMARY-ACTIVE-NUMBER-OF-ACCOUNTS"),
@@ -140,6 +176,7 @@ public class IndianCreditNormalizer {
     JsonNode cais = report.path("CAIS_Account");
     JsonNode credit = cais.path("CAIS_Summary").path("Credit_Account");
     JsonNode balances = cais.path("CAIS_Summary").path("Total_Outstanding_Balance");
+    JsonNode enquirySummary = report.path("TotalCAPS_Summary");
 
     List<NormalizedCreditReport.Tradeline> tradelines = new ArrayList<>();
     JsonNode details = cais.path("CAIS_Account_DETAILS");
@@ -185,8 +222,8 @@ public class IndianCreditNormalizer {
             null,
             money(balances, "Outstanding_Balance_All"),
             null,
-            null,
-            null,
+            oldestCreditHistoryMonths(tradelines),
+            integer(enquirySummary, "TotalCAPSLast180Days"),
             maxTradelineDpd(tradelines),
             countWrittenOff(tradelines)
         ),
@@ -374,9 +411,45 @@ public class IndianCreditNormalizer {
     return maximum;
   }
 
+  private Integer maxEquifaxDpd(JsonNode history) {
+    Integer maximum = null;
+    for (JsonNode month : arrayOrSingleton(history)) {
+      String status = text(month, "PaymentStatus");
+      if (status == null) continue;
+      Integer value = switch (status.toUpperCase()) {
+        case "000", "STD" -> 0;
+        case "01+" -> 1;
+        case "30+" -> 30;
+        case "60+" -> 60;
+        case "90+" -> 90;
+        default -> parseLeadingInteger(status);
+      };
+      if (value != null) {
+        maximum = maximum == null ? value : Math.max(maximum, value);
+      }
+    }
+    return maximum;
+  }
+
+  private Integer parseLeadingInteger(String value) {
+    Matcher matcher = Pattern.compile("^([0-9]{1,3})").matcher(value);
+    return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+  }
+
   private Integer maxTradelineDpd(List<NormalizedCreditReport.Tradeline> tradelines) {
     return tradelines.stream()
         .map(NormalizedCreditReport.Tradeline::maximumDaysPastDue)
+        .filter(value -> value != null)
+        .max(Integer::compareTo)
+        .orElse(null);
+  }
+
+  private Integer oldestCreditHistoryMonths(
+      List<NormalizedCreditReport.Tradeline> tradelines
+  ) {
+    return tradelines.stream()
+        .map(NormalizedCreditReport.Tradeline::openedDate)
+        .map(this::creditHistoryMonths)
         .filter(value -> value != null)
         .max(Integer::compareTo)
         .orElse(null);
@@ -453,5 +526,14 @@ public class IndianCreditNormalizer {
 
   private Integer positiveAsCount(BigDecimal value) {
     return value == null ? null : value.signum() > 0 ? 1 : 0;
+  }
+
+  private boolean isClosedAccount(String accountStatus) {
+    return accountStatus != null
+        && accountStatus.toLowerCase(Locale.ROOT).contains("closed");
+  }
+
+  private boolean isConventionalIndianBureauScore(Integer score) {
+    return score != null && score >= 300 && score <= 900;
   }
 }

@@ -57,7 +57,16 @@ public class NormalizedEvidenceService {
   @Transactional(readOnly = true)
   public List<NormalizedEvidence> currentEvidence(UUID borrowerId, UUID passportId) {
     LinkedHashMap<String, NormalizedEvidence> current = new LinkedHashMap<>();
-    evidence(borrowerId, passportId).forEach(item -> current.putIfAbsent(
+    List<NormalizedEvidence> saved = evidence(borrowerId, passportId);
+    boolean hasMultiBureauSimulation = saved.stream().anyMatch(item ->
+        "CREDIT".equals(item.getDomain())
+            && "GCP_SIMULATOR".equals(item.getProvider())
+            && !"CIBIL_SIMULATED".equals(item.getSourceSystem())
+    );
+    saved.stream().filter(item -> !(hasMultiBureauSimulation
+        && "CREDIT".equals(item.getDomain())
+        && "GCP_SIMULATOR".equals(item.getProvider())
+        && "CIBIL_SIMULATED".equals(item.getSourceSystem()))).forEach(item -> current.putIfAbsent(
         item.getDomain() + ":" + item.getCountryCode() + ":" + item.getProvider()
             + ":" + item.getSourceSystem(),
         item

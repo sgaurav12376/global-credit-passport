@@ -15,7 +15,7 @@ public class PassportShareGrant {
   @Column(name = "borrower_id", nullable = false) private UUID borrowerId;
   @Column(name = "passport_id", nullable = false) private UUID passportId;
   @Column(name = "output_id", nullable = false) private UUID outputId;
-  @Column(name = "token_hash", nullable = false, length = 64, updatable = false) private String tokenHash;
+  @Column(name = "token_hash", nullable = false, length = 64) private String tokenHash;
   @Column(name = "recipient_name", nullable = false, length = 200) private String recipientName;
   @Column(nullable = false, length = 200) private String purpose;
   @Column(nullable = false, length = 64) private String scope;
@@ -25,12 +25,21 @@ public class PassportShareGrant {
   @Column(name = "revoked_at") private Instant revokedAt;
   @Column(name = "last_accessed_at") private Instant lastAccessedAt;
   @Column(name = "access_count", nullable = false) private long accessCount;
+  @Column(name = "review_status", nullable = false, length = 40) private String reviewStatus;
+  @Column(name = "review_outcome", length = 40) private String reviewOutcome;
+  @Column(name = "borrower_message", length = 2000) private String borrowerMessage;
+  @Column(name = "borrower_response", length = 4000) private String borrowerResponse;
+  @Column(name = "borrower_responded_at") private Instant borrowerRespondedAt;
+  @Column(name = "internal_note", length = 4000) private String internalNote;
+  @Column(name = "review_updated_at") private Instant reviewUpdatedAt;
+  @Column(name = "review_completed_at") private Instant reviewCompletedAt;
   @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
 
   @PrePersist void prePersist() {
     if (id == null) id = UUID.randomUUID();
     if (createdAt == null) createdAt = Instant.now();
     if (consentedAt == null) consentedAt = createdAt;
+    if (reviewStatus == null) reviewStatus = "NOT_OPENED";
   }
 
   public UUID getId() { return id; }
@@ -60,5 +69,21 @@ public class PassportShareGrant {
   public void setLastAccessedAt(Instant value) { lastAccessedAt = value; }
   public long getAccessCount() { return accessCount; }
   public void setAccessCount(long value) { accessCount = value; }
+  public String getReviewStatus() { return reviewStatus; }
+  public void setReviewStatus(String value) { reviewStatus = value; }
+  public String getReviewOutcome() { return reviewOutcome; }
+  public void setReviewOutcome(String value) { reviewOutcome = value; }
+  public String getBorrowerMessage() { return borrowerMessage; }
+  public void setBorrowerMessage(String value) { borrowerMessage = value; }
+  public String getBorrowerResponse() { return borrowerResponse; }
+  public void setBorrowerResponse(String value) { borrowerResponse = value; }
+  public Instant getBorrowerRespondedAt() { return borrowerRespondedAt; }
+  public void setBorrowerRespondedAt(Instant value) { borrowerRespondedAt = value; }
+  public String getInternalNote() { return internalNote; }
+  public void setInternalNote(String value) { internalNote = value; }
+  public Instant getReviewUpdatedAt() { return reviewUpdatedAt; }
+  public void setReviewUpdatedAt(Instant value) { reviewUpdatedAt = value; }
+  public Instant getReviewCompletedAt() { return reviewCompletedAt; }
+  public void setReviewCompletedAt(Instant value) { reviewCompletedAt = value; }
   public Instant getCreatedAt() { return createdAt; }
 }

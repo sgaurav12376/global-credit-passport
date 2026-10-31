@@ -47,6 +47,7 @@ class IndependentNormalizationTest {
     assertEquals("GCP_CREDIT_V1", credit.schemaVersion());
     assertEquals(785, credit.nativeScore().value());
     assertEquals("GCP_CASHFLOW_V1", cashflow.schemaVersion());
+    assertEquals("1.4.0", cashflow.provenance().adapterVersion());
     assertEquals(new BigDecimal("1800"), cashflow.metrics().averageMonthlyNetCashflow());
     assertTrue(cashflow.dataQuality().completenessPercent() >= 80);
   }
@@ -69,5 +70,25 @@ class IndependentNormalizationTest {
     assertEquals(50, cashflow.dataQuality().completenessPercent());
     assertTrue(cashflow.dataQuality().warnings().stream()
         .anyMatch(value -> value.contains("two complete months")));
+  }
+
+  @Test
+  void documentOnlyCreditDoesNotCountAnEmptySummaryAsStructuredEvidence() {
+    var credit = new CreditNormalizationAdapter().normalize(
+        new NormalizedCreditReport(
+            "CIBIL", "report-pdf", 750, 300, 900, List.of(),
+            new NormalizedCreditReport.Summary(
+                null, null, null, null, null, null, null, null, null, null, null, null
+            ), List.of(), List.of("Structured tradelines are not available")
+        ),
+        new NormalizationContext(
+            "IN", "SUREPASS", "CIBIL", "report-pdf", "consent-v1",
+            Instant.parse("2026-09-09T10:00:00Z"),
+            Instant.parse("2026-09-09T10:01:00Z"), null
+        )
+    );
+
+    assertEquals(25, credit.dataQuality().completenessPercent());
+    assertEquals(List.of("nativeScore"), credit.dataQuality().availableFields());
   }
 }

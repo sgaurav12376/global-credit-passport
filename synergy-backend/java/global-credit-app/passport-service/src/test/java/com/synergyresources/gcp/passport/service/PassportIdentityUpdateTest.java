@@ -10,6 +10,7 @@ import com.synergyresources.gcp.passport.api.Dto;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PassportOutput;
+import com.synergyresources.gcp.passport.model.SurepassCreditReport;
 import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
@@ -17,11 +18,70 @@ import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 
 class PassportIdentityUpdateTest {
+  @Test
+  void updateDraftCarriesTheCompleteLatestCreditRequestBatch() {
+    UUID borrowerId = UUID.randomUUID();
+    UUID parentId = UUID.randomUUID();
+    PassportRepo passportRepo = mock(PassportRepo.class);
+    PassportPlaidConnectionRepo plaidConnectionRepo = mock(PassportPlaidConnectionRepo.class);
+    SurepassCreditReportRepo surepassRepo = mock(SurepassCreditReportRepo.class);
+    Passport parent = passport(parentId, null);
+    Instant newest = Instant.parse("2026-10-04T22:33:14Z");
+
+    SurepassCreditReport crif = report("CRIF", "crif-ref", newest);
+    SurepassCreditReport experian = report(
+        "EXPERIAN", "experian-ref", newest.minusMillis(6)
+    );
+    SurepassCreditReport equifax = report(
+        "EQUIFAX", "equifax-ref", newest.minusMillis(18)
+    );
+    SurepassCreditReport olderConsumer = report(
+        "CIBIL", "older-ref", newest.minusSeconds(116)
+    );
+
+    when(passportRepo.findByIdAndUserId(parentId, borrowerId)).thenReturn(Optional.of(parent));
+    when(surepassRepo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
+        borrowerId, parentId
+    )).thenReturn(List.of(crif, experian, equifax, olderConsumer));
+
+    PassportService service = new PassportService(
+        passportRepo,
+        mock(PassportSourceRepo.class),
+        mock(PlaidFinancialSnapshotService.class),
+        plaidConnectionRepo,
+        surepassRepo,
+        mock(PassportOutputService.class),
+        mock(EntrustVerificationRepo.class),
+        true
+    );
+    Dto.InitRequest request = new Dto.InitRequest();
+    request.purpose = "LOAN";
+    request.originCountry = "IN";
+    request.destCountry = "US";
+    request.residenceCountry = "US";
+    request.fullName = "Same Person";
+    request.dob = LocalDate.of(1990, 1, 1);
+    request.supersedesPassportId = parentId;
+
+    service.init(borrowerId, request);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<SurepassCreditReport>> captor = ArgumentCaptor.forClass(List.class);
+    verify(surepassRepo).saveAll(captor.capture());
+    List<SurepassCreditReport> inherited = captor.getValue();
+    assertEquals(3, inherited.size());
+    assertEquals(List.of("CRIF", "EXPERIAN", "EQUIFAX"),
+        inherited.stream().map(SurepassCreditReport::getBureau).toList());
+  }
+
   @Test
   void changingIdentityDetailsSupersedesThePreviousEntrustRun() {
     UUID borrowerId = UUID.randomUUID();
@@ -121,5 +181,15 @@ class PassportIdentityUpdateTest {
     when(passport.getResidenceCountry()).thenReturn("US");
     when(passport.getIdentityStatus()).thenReturn("ENTRUST_DECLINED");
     return passport;
+  }
+
+  private SurepassCreditReport report(String bureau, String providerReference, Instant createdAt) {
+    SurepassCreditReport report = mock(SurepassCreditReport.class);
+    when(report.getBureau()).thenReturn(bureau);
+    when(report.getProviderReference()).thenReturn(providerReference);
+    when(report.getConsentVersion()).thenReturn("finpass-multi-bureau-imported-test-v1");
+    when(report.getStatus()).thenReturn("SUCCESS");
+    when(report.getCreatedAt()).thenReturn(createdAt);
+    return report;
   }
 }

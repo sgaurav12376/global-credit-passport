@@ -4,6 +4,7 @@ import com.synergyresources.gcp.passport.security.CurrentBorrower;
 import com.synergyresources.gcp.passport.surepass.SurepassApiException;
 import com.synergyresources.gcp.passport.surepass.SurepassClient;
 import com.synergyresources.gcp.passport.surepass.SurepassCreditService;
+import com.synergyresources.gcp.passport.surepass.FinpassMultiBureauClient;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -85,6 +86,22 @@ public class SurepassController {
             request.firstName() + " " + request.lastName(),
             request.mobile(),
             request.pan(),
+            request.gender()
+        )
+    );
+  }
+
+  @PostMapping("/multi-bureau")
+  public SurepassCreditService.MultiBureauResult fetchMultiBureau(
+      @Valid @RequestBody CreditReportRequest request
+  ) {
+    return creditService.fetchMultiBureau(
+        CurrentBorrower.id(),
+        request.passportId(),
+        new FinpassMultiBureauClient.Request(
+            request.pan(),
+            request.firstName() + " " + request.lastName(),
+            request.mobile(),
             request.gender()
         )
     );

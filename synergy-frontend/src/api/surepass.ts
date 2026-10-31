@@ -66,6 +66,32 @@ export type SurepassCreditRequest = {
   consent: boolean;
 };
 
+export type BureauOutcome = {
+  bureau: string;
+  providerSuccess: boolean;
+  providerStatusCode?: number | null;
+  providerMessage?: string | null;
+  normalized: boolean;
+};
+
+export type MultiBureauCreditResult = {
+  providerReference?: string | null;
+  reports: StoredCreditReport[];
+  outcomes: BureauOutcome[];
+};
+
+export async function fetchMultiBureauCreditReport(payload: SurepassCreditRequest) {
+  const response = await authenticatedFetch(
+    `${API_BASE}/v1/surepass/credit-reports/multi-bureau`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  return responseJson<MultiBureauCreditResult>(response, "Fetch India multi-bureau report");
+}
+
 export async function fetchSurepassCreditReport(
   bureau: "cibil" | "cibil-pdf" | "crif" | "experian",
   payload: SurepassCreditRequest
@@ -79,6 +105,55 @@ export async function fetchSurepassCreditReport(
     }
   );
   return responseJson<StoredCreditReport>(response, `Fetch ${bureau.toUpperCase()} report`);
+}
+
+export async function createSimulatedCibilReport(
+  passportId: string,
+  scenario: "STRONG" | "BALANCED" | "HIGH_RISK"
+) {
+  const response = await authenticatedFetch(
+    `${API_BASE}/v1/local-simulations/credit-reports/cibil`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passportId, scenario, simulationAcknowledged: true }),
+    }
+  );
+  return responseJson<StoredCreditReport>(response, "Create simulated CIBIL report");
+}
+
+export async function createSimulatedMultiBureauReport(
+  passportId: string,
+  scenario: "COMPLETE" | "PARTIAL"
+) {
+  const response = await authenticatedFetch(
+    `${API_BASE}/v1/local-simulations/credit-reports/multi-bureau`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passportId, scenario, simulationAcknowledged: true }),
+    }
+  );
+  return responseJson<MultiBureauCreditResult>(response, "Create simulated multi-bureau report");
+}
+
+export async function importFinpassTestResponse(
+  passportId: string,
+  responsePayload: unknown
+) {
+  const response = await authenticatedFetch(
+    `${API_BASE}/v1/local-simulations/credit-reports/multi-bureau/import`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passportId,
+        response: responsePayload,
+        providerTestAcknowledged: true,
+      }),
+    }
+  );
+  return responseJson<MultiBureauCreditResult>(response, "Import Finpass provider test response");
 }
 
 export async function downloadSurepassCreditReport(reportId: string) {
