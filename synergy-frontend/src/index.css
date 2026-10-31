@@ -800,13 +800,8 @@ html,body,#root{ height:100%; margin:0; }
   .simple-card{ padding:12pt; border:1px solid #ccd5e1; border-radius:0; box-shadow:none; break-inside:avoid; }
   .simulation-warning{ margin:0 0 10pt; padding:8pt 10pt; border-radius:0; break-inside:avoid; }
   .lender-summary-metrics,.lender-indicator-grid,.risk-factor-table,.native-score-reference,.evidence-audit-list{ break-inside:avoid; }
-  .lender-collapsible-section details>summary{ display:none !important; }
-  .lender-collapsible-section details:not([open])>.lender-section-details-content{ display:grid !important; }
-  .lender-collapsible-section{ display:block !important; }
-  .lender-section-details-content{ padding:0; }
-  .lender-risk-card,.lender-audit-card{ page-break-before:always; }
-  .technical-methodology:not([open])>*:not(summary),.standardization-trace:not([open])>*:not(summary){ display:block !important; }
-  .technical-methodology>summary,.standardization-trace>summary{ display:none !important; }
+  .lender-section-details-content{ padding:10pt 0 0; }
+  .lender-risk-card:has(> details[open]),.lender-audit-card:has(> details[open]){ page-break-before:always; }
   .risk-factor-table>div{ break-inside:avoid; }
   a{ color:inherit; text-decoration:none; }
 }
