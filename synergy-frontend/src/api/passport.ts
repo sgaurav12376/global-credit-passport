@@ -88,6 +88,7 @@ export type PassportOutput = {
     evidenceEnvironment?: {
       creditSimulated: boolean;
       creditProviderTest?: boolean;
+      usCreditProviderTest?: boolean;
       openBankingSandbox: boolean;
       identitySandbox: boolean;
     };
@@ -326,11 +327,21 @@ export type SharedPassport = {
     evidenceEnvironment?: {
       creditSimulated: boolean;
       creditProviderTest?: boolean;
+      usCreditProviderTest?: boolean;
       openBankingSandbox: boolean;
       identitySandbox: boolean;
     };
     evidenceCoverage: NonNullable<PassportOutput["document"]["evidenceCoverage"]>;
     creditReconciliation: NonNullable<PassportOutput["document"]["creditReconciliation"]>;
+    creditEvidenceSummary?: Array<{
+      countryCode: string;
+      provider: string;
+      sourceSystem: string;
+      completenessPercent: number;
+      nativeValue?: number;
+      nativeMinimum?: number;
+      nativeMaximum?: number;
+    }>;
     riskAssessment: NonNullable<PassportOutput["document"]["riskAssessment"]>;
   };
 };

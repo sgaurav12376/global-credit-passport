@@ -49,6 +49,14 @@ finpass:
   api-key: ${FINPASS_API_KEY:}
   api-secret: ${FINPASS_API_SECRET:}
 
+crs:
+  enabled: ${CRS_ENABLED:false}
+  data-mode: ${CRS_DATA_MODE:fixture}
+  base-url: ${CRS_BASE_URL:https://api-sandbox.stitchcredit.com/api}
+  bearer-token: ${CRS_BEARER_TOKEN:}
+  equifax-option: ${CRS_EQUIFAX_OPTION:}
+  inquiry-type: ${CRS_INQUIRY_TYPE:unconfirmed}
+
 entrust:
   enabled: ${ENTRUST_ENABLED:false}
   base-url: ${ENTRUST_BASE_URL:https://api.us.onfido.com}

@@ -159,12 +159,22 @@ public class PassportOutputService {
     ObjectNode evidenceEnvironment = document.putObject("evidenceEnvironment");
     evidenceEnvironment.put("creditSimulated", simulatedCredit);
     evidenceEnvironment.put("creditProviderTest", providerTestCredit);
+    evidenceEnvironment.put("usCreditProviderTest", normalized.evidence().stream().anyMatch(item ->
+        "CREDIT".equals(item.getDomain()) && "US".equalsIgnoreCase(item.getCountryCode())
+            && "CRS".equals(item.getProvider())
+            && item.getProviderReference() != null
+            && item.getProviderReference().startsWith("crs-equifax-fixture")
+    ));
     evidenceEnvironment.put("openBankingSandbox",
         plaid != null && "sandbox".equalsIgnoreCase(plaidEnvironment));
     evidenceEnvironment.put("identitySandbox", sandboxIdentityPolicy);
 
     document.set("evidenceCoverage", objectMapper.valueToTree(normalized.coverage()));
-    var reconciliation = reconciliationService.reconcile(normalized.evidence());
+    // Cross-bureau reconciliation is country-specific. Destination-country credit
+    // remains separate evidence and must not be appended to the source-country bureaus.
+    var reconciliation = reconciliationService.reconcile(
+        normalized.evidence(), passport.getOriginCountry()
+    );
     document.set("creditReconciliation", objectMapper.valueToTree(reconciliation));
     document.set("riskAssessment", objectMapper.valueToTree(
         riskAssessmentService.assess(

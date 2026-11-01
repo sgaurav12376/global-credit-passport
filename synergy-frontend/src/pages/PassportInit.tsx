@@ -6,6 +6,7 @@ import { getEntrustVerification, refreshEntrustVerification, startEntrustVerific
 import type { EntrustVerification } from "../api/entrust";
 import PlaidConnect from "../components/PlaidConnect";
 import SurepassCreditConnect from "../components/SurepassCreditConnect";
+import CrsEquifaxConnect from "../components/CrsEquifaxConnect";
 
 type PassportInitState = {
   status: "not_started" | "in_progress" | "complete";
@@ -728,6 +729,19 @@ export default function PassportInit() {
                     persistInProgress({
                       sources: { creditBureau: true, bank },
                     });
+                  }}
+                />
+
+                <CrsEquifaxConnect
+                  readOnly={readOnly}
+                  passportId={passportId}
+                  fullName={fullName}
+                  dob={dob}
+                  destinationCountry={destination}
+                  ensurePassportId={ensurePassportId}
+                  onConnected={() => {
+                    setCreditBureau(true);
+                    persistInProgress({ sources: { creditBureau: true, bank } });
                   }}
                 />
 

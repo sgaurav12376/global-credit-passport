@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.synergyresources.gcp.passport.model.Passport;
@@ -78,7 +79,15 @@ class PassportShareServiceTest {
     document.putObject("corridor").put("originCountry", "IN");
     document.putObject("identityVerification").put("provider", "ENTRUST");
     document.putObject("riskAssessment").put("riskIndex", 68);
-    document.putArray("normalizedEvidence").addObject().put("secret", "raw payload");
+    ObjectNode normalized = document.putArray("normalizedEvidence").addObject();
+    normalized.put("domain", "CREDIT");
+    normalized.put("countryCode", "US");
+    normalized.put("provider", "CRS");
+    normalized.put("sourceSystem", "EQUIFAX");
+    normalized.put("completenessPercent", 50);
+    normalized.put("secret", "raw payload");
+    normalized.putObject("dataset").putObject("nativeScore")
+        .put("value", 742).put("minimum", 300).put("maximum", 850);
     document.putObject("verifiedSources").put("secret", "raw provider response");
     when(grant.getTokenHash()).thenReturn("hash");
     when(grant.getBorrowerId()).thenReturn(borrowerId);
@@ -106,6 +115,11 @@ class PassportShareServiceTest {
     assertTrue(result.report().has("riskAssessment"));
     assertFalse(result.report().has("normalizedEvidence"));
     assertFalse(result.report().has("verifiedSources"));
+    JsonNode creditSummary = result.report().path("creditEvidenceSummary").get(0);
+    assertEquals("US", creditSummary.path("countryCode").asText());
+    assertEquals("CRS", creditSummary.path("provider").asText());
+    assertEquals(742, creditSummary.path("nativeValue").asInt());
+    assertFalse(creditSummary.has("secret"));
   }
 
   @Test

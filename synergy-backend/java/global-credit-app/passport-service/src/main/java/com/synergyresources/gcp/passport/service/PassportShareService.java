@@ -2,6 +2,7 @@ package com.synergyresources.gcp.passport.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.synergyresources.gcp.passport.model.PassportOutput;
 import com.synergyresources.gcp.passport.model.PassportShareGrant;
@@ -320,7 +321,34 @@ public class PassportShareService {
     copy(report, source, "evidenceCoverage");
     copy(report, source, "creditReconciliation");
     copy(report, source, "riskAssessment");
+    report.set("creditEvidenceSummary", creditEvidenceSummary(
+        source.path("normalizedEvidence")
+    ));
     return report;
+  }
+
+  private ArrayNode creditEvidenceSummary(JsonNode normalizedEvidence) {
+    ArrayNode result = objectMapper.createArrayNode();
+    if (!normalizedEvidence.isArray()) return result;
+    normalizedEvidence.forEach(item -> {
+      if (!"CREDIT".equals(item.path("domain").asText())) return;
+      ObjectNode summary = result.addObject();
+      summary.put("countryCode", item.path("countryCode").asText());
+      summary.put("provider", item.path("provider").asText());
+      summary.put("sourceSystem", item.path("sourceSystem").asText());
+      summary.put("completenessPercent", item.path("completenessPercent").asInt());
+      JsonNode nativeScore = item.path("dataset").path("nativeScore");
+      if (nativeScore.path("value").isNumber()) {
+        summary.put("nativeValue", nativeScore.path("value").intValue());
+      }
+      if (nativeScore.path("minimum").isNumber()) {
+        summary.put("nativeMinimum", nativeScore.path("minimum").intValue());
+      }
+      if (nativeScore.path("maximum").isNumber()) {
+        summary.put("nativeMaximum", nativeScore.path("maximum").intValue());
+      }
+    });
+    return result;
   }
 
   private ObjectNode identitySummary(JsonNode identity) {

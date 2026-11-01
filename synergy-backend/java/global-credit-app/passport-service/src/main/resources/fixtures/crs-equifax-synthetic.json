@@ -1,0 +1,19 @@
+{
+  "pdfReportId": "crs-equifax-fixture",
+  "data": {
+    "creditScore": 742,
+    "summary": {
+      "totalAccounts": 6,
+      "activeAccounts": 4,
+      "closedAccounts": 2,
+      "delinquentAccounts": 0,
+      "totalBalance": 18400,
+      "totalCreditLimit": 62000,
+      "creditHistoryMonths": 54,
+      "recentInquiries": 1,
+      "maximumDaysPastDue": 0,
+      "chargeOffAccounts": 0
+    }
+  },
+  "internationalData": {}
+}

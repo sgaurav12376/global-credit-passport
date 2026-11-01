@@ -18,8 +18,22 @@ public class CreditBureauReconciliationService {
   );
 
   public CreditBureauReconciliation reconcile(List<NormalizedEvidence> evidence) {
+    String countryCode = evidence.stream()
+        .filter(item -> "CREDIT".equals(item.getDomain()))
+        .map(NormalizedEvidence::getCountryCode)
+        .filter(value -> value != null && !value.isBlank())
+        .findFirst().orElse(null);
+    return reconcile(evidence, countryCode);
+  }
+
+  public CreditBureauReconciliation reconcile(
+      List<NormalizedEvidence> evidence, String countryCode
+  ) {
     List<NormalizedEvidence> credit = evidence.stream()
-        .filter(item -> "CREDIT".equals(item.getDomain())).toList();
+        .filter(item -> "CREDIT".equals(item.getDomain()))
+        .filter(item -> countryCode == null
+            || countryCode.equalsIgnoreCase(item.getCountryCode()))
+        .toList();
     List<CreditBureauReconciliation.NativeScoreView> scores = credit.stream()
         .map(this::score).toList();
     Map<String, CreditBureauReconciliation.MetricRange> ranges = new LinkedHashMap<>();

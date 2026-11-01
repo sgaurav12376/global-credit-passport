@@ -28,6 +28,21 @@ class CreditBureauReconciliationServiceTest {
     assertTrue(result.warnings().stream().anyMatch(value -> value.contains("not averaged")));
   }
 
+  @Test
+  void keepsDestinationCountryCreditOutOfSourceCountryReconciliation() throws Exception {
+    NormalizedEvidence indiaEquifax = credit("EQUIFAX", 771, 3, 1200);
+    NormalizedEvidence usEquifax = credit("EQUIFAX", 742, 4, 1800);
+    usEquifax.setCountryCode("US");
+    usEquifax.setProvider("CRS");
+
+    CreditBureauReconciliation result = new CreditBureauReconciliationService()
+        .reconcile(List.of(indiaEquifax, usEquifax), "IN");
+
+    assertEquals(1, result.bureauCount());
+    assertEquals("IN", result.nativeScores().getFirst().countryCode());
+    assertEquals(771, result.nativeScores().getFirst().value());
+  }
+
   private NormalizedEvidence credit(
       String bureau, int score, int totalAccounts, int currentBalance
   ) throws Exception {

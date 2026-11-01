@@ -108,6 +108,15 @@ function reconciliationRange(metric: string, minimum: number, maximum: number) {
   return `${minimum}–${maximum}`;
 }
 
+function evidenceNativeScore(evidence: NonNullable<PassportOutput["document"]["normalizedEvidence"]>[number]) {
+  const score = evidence.dataset?.nativeScore;
+  if (!score || typeof score !== "object") return null;
+  const value = "value" in score && typeof score.value === "number" ? score.value : null;
+  const minimum = "minimum" in score && typeof score.minimum === "number" ? score.minimum : null;
+  const maximum = "maximum" in score && typeof score.maximum === "number" ? score.maximum : null;
+  return { value, minimum, maximum };
+}
+
 export default function Dashboard() {
   const nav = useNavigate();
   const [dashboardView, setDashboardView] = useState<"overview" | "financial" | "score" | "sharing">("overview");
@@ -147,6 +156,13 @@ export default function Dashboard() {
       { country: destination, domain: "CASHFLOW", available: available("CASHFLOW", destination), isOrigin: false },
     ];
     return { origin, destination, cells };
+  }, [active, output]);
+  const destinationCreditEvidence = useMemo(() => {
+    if (!output || !active) return [];
+    const destination = active.destCountry.toUpperCase();
+    return (output.document.normalizedEvidence || []).filter((item) =>
+      item.domain === "CREDIT" && item.countryCode.toUpperCase() === destination
+    );
   }, [active, output]);
 
   useEffect(() => {
@@ -196,13 +212,15 @@ export default function Dashboard() {
 
   const evidenceEnvironment = output?.document.evidenceEnvironment;
   const testEvidence = evidenceEnvironment
-    ? evidenceEnvironment.creditSimulated || Boolean(evidenceEnvironment.creditProviderTest) || evidenceEnvironment.openBankingSandbox || evidenceEnvironment.identitySandbox
+    ? evidenceEnvironment.creditSimulated || Boolean(evidenceEnvironment.creditProviderTest) || Boolean(evidenceEnvironment.usCreditProviderTest) || evidenceEnvironment.openBankingSandbox || evidenceEnvironment.identitySandbox
     : Boolean(output?.document.coverage.creditBureauSimulated || output?.document.identityVerification.sandboxSimulation);
   const testEvidenceDescriptions = output ? [
     (evidenceEnvironment?.creditSimulated ?? output.document.coverage.creditBureauSimulated)
       ? `${countryLabel(active?.originCountry)} credit history is simulated` : null,
     evidenceEnvironment?.creditProviderTest
       ? `${countryLabel(active?.originCountry)} credit history uses provider test data` : null,
+    evidenceEnvironment?.usCreditProviderTest
+      ? `${countryLabel(active?.destCountry)} credit history uses a synthetic CRS Equifax fixture` : null,
     evidenceEnvironment?.openBankingSandbox
       ? `${countryLabel(active?.destCountry)} open-banking information uses sandbox data` : null,
     (evidenceEnvironment?.identitySandbox ?? output.document.identityVerification.sandboxSimulation)
@@ -257,18 +275,20 @@ export default function Dashboard() {
         </div>}
         {financialEvidence && <section className="command-evidence"><header><span className="eyebrow">INFORMATION INCLUDED</span><button type="button" onClick={() => setDashboardView("financial")}>Review records</button></header><div>
           <article><span className="country-chip">{financialEvidence.origin}</span><p><b>{countryLabel(financialEvidence.origin)} credit history</b><small>{output.document.creditReconciliation?.bureauCount || 0} bureau record{output.document.creditReconciliation?.bureauCount === 1 ? "" : "s"} included</small></p></article>
+          {destinationCreditEvidence.length > 0 && <article><span className="country-chip">{financialEvidence.destination}</span><p><b>{countryLabel(financialEvidence.destination)} credit history</b><small>{destinationCreditEvidence.length} local bureau record{destinationCreditEvidence.length === 1 ? "" : "s"} included</small></p></article>}
           <article><span className="country-chip">{financialEvidence.destination}</span><p><b>{countryLabel(financialEvidence.destination)} banking and cash flow</b><small>{output.document.coverage.openBankingAvailable ? "Connected account analysis included" : "Not connected"}</small></p></article>
         </div></section>}
         </>}
         {dashboardView === "financial" && financialEvidence && <div className="financial-records-view">
           <div className="record-summary-grid">
             <article><span className="country-chip">{financialEvidence.origin}</span><div><small>SOURCE-COUNTRY CREDIT</small><b>{output.document.creditReconciliation?.bureauCount || 0} bureau record{output.document.creditReconciliation?.bureauCount === 1 ? "" : "s"}</b><p>{output.document.creditReconciliation?.nativeScores.map((score) => `${friendlyBureauLabel(score.bureau)} ${score.value ?? "—"}`).join(" · ") || "No credit record included"}</p></div></article>
+            <article><span className="country-chip">{financialEvidence.destination}</span><div><small>DESTINATION-COUNTRY CREDIT</small><b>{destinationCreditEvidence.length ? `${destinationCreditEvidence.length} bureau record${destinationCreditEvidence.length === 1 ? "" : "s"}` : "No local credit record"}</b><p>{destinationCreditEvidence.length ? destinationCreditEvidence.map((item) => `${friendlyBureauLabel(item.sourceSystem)} ${evidenceNativeScore(item)?.value ?? "—"}`).join(" · ") : "No destination-country credit file included"}</p></div></article>
             <article><span className="country-chip">{financialEvidence.destination}</span><div><small>DESTINATION FINANCES</small><b>{output.document.coverage.openBankingAvailable ? "Banking and cash flow included" : "No accounts connected"}</b><p>{output.document.coverage.openBankingAvailable ? "Income, outflows and recurring obligations analyzed" : "Connect eligible accounts to add this evidence"}</p></div></article>
           </div>
           <details className="records-detail-section corridor-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, coverage: open })); }}>
             <summary><span><b>Cross-border evidence coverage</b><small>See included and unavailable categories by country</small></span><em>View map</em></summary>
             {openRecordSections.coverage && <div className="records-detail-content">
-            <div className="section-heading-row"><div><span className="eyebrow">CROSS-BORDER EVIDENCE MAP</span><h3>Information included in your profile</h3><p>This map shows what is available from each country. An unavailable category is not treated as negative information.</p></div><div className="included-evidence-summary"><span>Included evidence</span><b>{countryLabel(financialEvidence.origin)} credit history</b><b>{countryLabel(financialEvidence.destination)} banking and cash flow</b></div></div>
+            <div className="section-heading-row"><div><span className="eyebrow">CROSS-BORDER EVIDENCE MAP</span><h3>Information included in your profile</h3><p>This map shows what is available from each country. An unavailable category is not treated as negative information.</p></div><div className="included-evidence-summary"><span>Included evidence</span><b>{countryLabel(financialEvidence.origin)} credit history</b>{destinationCreditEvidence.length > 0 && <b>{countryLabel(financialEvidence.destination)} credit history</b>}<b>{countryLabel(financialEvidence.destination)} banking and cash flow</b></div></div>
             <div className="corridor-evidence-matrix">
               {[financialEvidence.origin, financialEvidence.destination].map((country) => <section key={country}>
                 <header><span>{country === financialEvidence.origin ? "Financial history from" : "Applying in"}</span><b>{countryLabel(country)}</b><small>{country}</small></header>
@@ -293,6 +313,15 @@ export default function Dashboard() {
             </div>}
           </details>
 
+          {destinationCreditEvidence.length > 0 && <details className="records-detail-section financial-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, destinationCredit: open })); }}>
+            <summary><span><b>{countryLabel(financialEvidence.destination)} credit record</b><small>Local bureau score and available standardized information</small></span><em>View credit details</em></summary>
+            {openRecordSections.destinationCredit && <div className="records-detail-content">
+              <div className="financial-section-title"><span className="country-chip">{financialEvidence.destination}</span><div><span className="eyebrow">DESTINATION-COUNTRY RECORD</span><h3>{countryLabel(financialEvidence.destination)} credit history</h3><p>This local credit record remains separate from source-country bureau records and is not averaged with them.</p></div></div>
+              <div className="native-score-row">{destinationCreditEvidence.map((item) => { const score = evidenceNativeScore(item); return <article key={item.evidenceId || `${item.provider}-${item.sourceSystem}`}><span>{friendlyBureauLabel(item.sourceSystem)}</span><strong>{score?.value ?? "—"}</strong><b>Native score</b><small>{score?.minimum != null && score.maximum != null ? `Original range ${score.minimum}–${score.maximum}` : "Original scale retained"}</small><small>{item.provider} · {item.completenessPercent}% complete</small></article>; })}</div>
+              {output.document.riskAssessment?.assessmentEvidence?.countryCode.toUpperCase() !== financialEvidence.destination && <div className="assessment-evidence-banner"><div><span className="eyebrow">SUPPORTING EVIDENCE</span><b>Not selected for factor calculation</b><p>The configured selection policy used the more complete eligible credit record shown in the assessment. This destination-country record remains available for review.</p></div></div>}
+            </div>}
+          </details>}
+
           <details className="records-detail-section financial-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, banking: open })); }}>
             <summary><span><b>{countryLabel(financialEvidence.destination)} financial accounts</b><small>Income, cash flow, account coverage and connected institutions</small></span><em>View banking details</em></summary>
             {openRecordSections.banking && <div className="records-detail-content">
@@ -304,7 +333,8 @@ export default function Dashboard() {
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("score")}>Continue to financial assessment</button></div>
         </div>}
         {dashboardView === "score" && output.document.riskAssessment && <div className="risk-panel">
-          <div className="risk-head"><div><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 profile index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : borrowerProfileBand(output.document.riskAssessment.riskBand)}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>supporting information ready</span>{consistencyScore != null && <small>Cross-bureau consistency: {consistencyScore}%{consistencyScore < 60 ? " · review needed" : ""}</small>}</div></div>
+          <div className="risk-head"><div><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 profile index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : borrowerProfileBand(output.document.riskAssessment.riskBand)}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>supporting information ready</span>{consistencyScore != null && <small>Source-country bureau consistency: {consistencyScore}%{consistencyScore < 60 ? " · review needed" : ""}</small>}</div></div>
+          {destinationCreditEvidence.length > 0 && output.document.riskAssessment.assessmentEvidence?.countryCode.toUpperCase() !== destinationCreditEvidence[0].countryCode.toUpperCase() && <div className="assessment-evidence-banner"><div><span className="eyebrow">ADDITIONAL DESTINATION-COUNTRY CREDIT</span><b>{destinationCreditEvidence.map((item) => `${friendlyBureauLabel(item.sourceSystem)} ${evidenceNativeScore(item)?.value ?? "—"}`).join(" · ")}</b><p>This record is available as supporting evidence. It was not selected for factor calculation because the selected credit record was more complete under the configured policy.</p></div><small>{Math.max(...destinationCreditEvidence.map((item) => item.completenessPercent))}% complete</small></div>}
           <div className="assessment-first-view">
             <section className="attention"><span>Needs attention</span>{attentionDimensions.length ? attentionDimensions.map((dimension) => { const explanation = assessmentExplanations.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><p><b>{dimension.label}</b><small>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</small></p><strong>{dimension.score}/100</strong></div>; }) : <p>No factors currently require attention.</p>}</section>
             <section className="positive"><span>Supporting indicators</span>{positiveDimensions.slice(0, 4).map((dimension) => { const explanation = assessmentExplanations.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><p><b>{dimension.label}</b><small>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</small></p><strong>{dimension.score}/100</strong></div>; })}</section>
@@ -314,7 +344,7 @@ export default function Dashboard() {
           <details className="explainability-panel organized-explainability" onToggle={(event) => { const open = event.currentTarget.open; setShowAssessmentDetails(open); }}>
             <summary>View all assessment factors and methodology</summary>
             {showAssessmentDetails && <div className="explainability-content">
-              {output.document.riskAssessment.assessmentEvidence && <div className="assessment-evidence-banner"><div><span className="eyebrow">CREDIT FACTOR SOURCE</span><b>{friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} structured record</b><p>The credit factors below use this selected bureau record. All native bureau scores remain separate and are not averaged.</p></div><small>{output.document.riskAssessment.assessmentEvidence.completenessPercent}% complete</small></div>}
+              {output.document.riskAssessment.assessmentEvidence && <div className="assessment-evidence-banner"><div><span className="eyebrow">CREDIT FACTOR SOURCE</span><b>{countryLabel(output.document.riskAssessment.assessmentEvidence.countryCode)} · {friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} structured record</b><p>The credit factors below use this selected bureau record. All native bureau scores remain separate and are not averaged.</p></div><small>{output.document.riskAssessment.assessmentEvidence.completenessPercent}% complete</small></div>}
               <div className="risk-factor-table"><div className="risk-factor-header"><span>Assessment factor</span><span>Observed result</span><span>Score</span><span>Evidence source</span></div>{output.document.riskAssessment.dimensions.map((dimension) => { const explanation = output.document.riskAssessment?.dimensionExplanations?.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><span><b>{dimension.label}</b><small>{!dimension.available ? "Not scored" : dimension.score != null && dimension.score < 70 ? "Needs attention" : "Positive indicator"}</small></span><span>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</span><strong>{dimension.score == null ? "—" : `${dimension.score}/100`}</strong><span>{friendlyEvidenceSource(explanation?.sourceProvider, explanation?.sourceCountry, explanation?.evidenceStatus === "SYNTHETIC")}{explanation?.sourceSystem && explanation.sourceDomain === "CREDIT" ? ` · ${friendlyBureauLabel(explanation.sourceSystem)}` : ""}</span></div>; })}</div>
               <section>
                 <span className="eyebrow">PROFILE INDEX</span>
