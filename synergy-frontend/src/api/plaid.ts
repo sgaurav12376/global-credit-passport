@@ -114,6 +114,22 @@ export async function createPlaidLinkToken() {
   return responseJson<PlaidLinkTokenResponse>(response, "Create Plaid Link token");
 }
 
+export async function createPlaidAccountUpdateToken(itemId: string) {
+  const response = await fetch(
+    `${API_BASE}/v1/plaid/connections/${encodeURIComponent(itemId)}/link-token`,
+    { method: "POST" }
+  );
+  return responseJson<PlaidLinkTokenResponse>(response, "Prepare account selection");
+}
+
+export async function refreshPlaidAccounts(itemId: string) {
+  const response = await fetch(
+    `${API_BASE}/v1/plaid/connections/${encodeURIComponent(itemId)}/accounts/refresh`,
+    { method: "POST" }
+  );
+  return responseJson<PlaidConnectionResult>(response, "Refresh selected accounts");
+}
+
 export async function connectPlaidItem(
   publicToken: string,
   passportId?: string

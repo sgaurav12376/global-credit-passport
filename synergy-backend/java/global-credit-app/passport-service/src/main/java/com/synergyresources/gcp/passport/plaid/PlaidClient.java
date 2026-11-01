@@ -34,6 +34,17 @@ public class PlaidClient {
     return post("/link/token/create", body);
   }
 
+  public JsonNode createAccountUpdateLinkToken(String clientUserId, String accessToken) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("client_name", "Global Credit Passport");
+    body.put("language", "en");
+    body.put("country_codes", List.of("US"));
+    body.put("user", Map.of("client_user_id", clientUserId));
+    body.put("access_token", accessToken);
+    body.put("update", Map.of("account_selection_enabled", true));
+    return post("/link/token/create", body);
+  }
+
   public TokenExchange exchangePublicToken(String publicToken) {
     JsonNode response = post(
         "/item/public_token/exchange",

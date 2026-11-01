@@ -14,6 +14,7 @@ public class Passport {
   @Column(nullable=false) private String purpose;
   @Column(name="origin_country", nullable=false) private String originCountry;
   @Column(name="dest_country", nullable=false) private String destCountry;
+  @Column(name="residence_country", nullable=false) private String residenceCountry;
 
   @Column(name="full_name") private String fullName;
   @Column(name="dob") private LocalDate dob;
@@ -49,6 +50,8 @@ public class Passport {
   public void setOriginCountry(String originCountry) { this.originCountry = originCountry; }
   public String getDestCountry() { return destCountry; }
   public void setDestCountry(String destCountry) { this.destCountry = destCountry; }
+  public String getResidenceCountry() { return residenceCountry; }
+  public void setResidenceCountry(String value) { residenceCountry = value; }
   public String getFullName() { return fullName; }
   public void setFullName(String fullName) { this.fullName = fullName; }
   public LocalDate getDob() { return dob; }

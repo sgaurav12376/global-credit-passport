@@ -32,6 +32,12 @@ public class CognitoSecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+            .requestMatchers(HttpMethod.GET, "/v1/shared-passports/**").permitAll()
+            .requestMatchers(HttpMethod.PATCH, "/v1/shared-passports/*/review").permitAll()
+            .requestMatchers(HttpMethod.POST, "/v1/shared-passports/*/document-requests").permitAll()
+            .requestMatchers(HttpMethod.PATCH, "/v1/shared-passports/*/document-requests/*").permitAll()
+            .requestMatchers(HttpMethod.GET, "/v1/lender-invitations/**").permitAll()
+            .requestMatchers(HttpMethod.POST, "/v1/lender-invitations").permitAll()
             .requestMatchers("/v1/**").authenticated()
             .anyRequest().denyAll()
         )

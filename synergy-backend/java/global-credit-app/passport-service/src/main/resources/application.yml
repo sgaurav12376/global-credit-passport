@@ -19,6 +19,10 @@ gcp:
     local-borrower-id: ${GCP_LOCAL_BORROWER_ID:00000000-0000-0000-0000-000000000001}
     cognito-issuer-uri: ${COGNITO_ISSUER_URI:}
     cognito-client-id: ${COGNITO_USER_POOL_CLIENT_ID:}
+  pilot:
+    # Sandbox submissions are recorded as evidence but do not require provider approval.
+    # Set false outside the pilot; production then requires identity status APPROVED.
+    sandbox-identity-policy: ${GCP_SANDBOX_IDENTITY_POLICY:true}
 
 management:
   endpoints:
@@ -38,3 +42,23 @@ surepass:
   bearer-token: ${SUREPASS_BEARER_TOKEN:}
   document-directory: ${SUREPASS_DOCUMENT_DIRECTORY:./data/surepass-reports}
   max-document-bytes: ${SUREPASS_MAX_DOCUMENT_BYTES:20971520}
+
+finpass:
+  enabled: ${FINPASS_ENABLED:false}
+  base-url: ${FINPASS_BASE_URL:https://api.finpass.ai}
+  api-key: ${FINPASS_API_KEY:}
+  api-secret: ${FINPASS_API_SECRET:}
+
+crs:
+  enabled: ${CRS_ENABLED:false}
+  data-mode: ${CRS_DATA_MODE:fixture}
+  base-url: ${CRS_BASE_URL:https://api-sandbox.stitchcredit.com/api}
+  bearer-token: ${CRS_BEARER_TOKEN:}
+  equifax-option: ${CRS_EQUIFAX_OPTION:}
+  inquiry-type: ${CRS_INQUIRY_TYPE:unconfirmed}
+
+entrust:
+  enabled: ${ENTRUST_ENABLED:false}
+  base-url: ${ENTRUST_BASE_URL:https://api.us.onfido.com}
+  api-token: ${ENTRUST_API_TOKEN:}
+  workflow-id: ${ENTRUST_WORKFLOW_ID:}

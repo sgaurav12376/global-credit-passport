@@ -64,6 +64,18 @@ public class PlaidController {
     return plaidService.refreshTransactions(currentUserId(), itemId);
   }
 
+  @PostMapping("/connections/{itemId}/link-token")
+  public PlaidService.LinkTokenResponse createAccountUpdateLinkToken(
+      @PathVariable String itemId
+  ) {
+    return plaidService.createAccountUpdateLinkToken(currentUserId(), itemId);
+  }
+
+  @PostMapping("/connections/{itemId}/accounts/refresh")
+  public PlaidService.ConnectionResult refreshAccounts(@PathVariable String itemId) {
+    return plaidService.refreshAccounts(currentUserId(), itemId);
+  }
+
   @GetMapping("/connections/latest")
   public PlaidService.ConnectionResult latestConnection() {
     return plaidService.latestConnection(currentUserId());

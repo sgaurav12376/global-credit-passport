@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAccessToken } from "../auth/auth";
-import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePassportUpdateDraft, initPassport, recordEntrustSubmission, updatePassportDraft } from "../api/passport";
+import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePassportUpdateDraft, initPassport, updatePassportDraft } from "../api/passport";
+import { getEntrustVerification, refreshEntrustVerification, startEntrustVerification as startEntrust } from "../api/entrust";
+import type { EntrustVerification } from "../api/entrust";
 import PlaidConnect from "../components/PlaidConnect";
 import SurepassCreditConnect from "../components/SurepassCreditConnect";
-
-const ENTRUST_WORKFLOW_URL =
-  import.meta.env.VITE_ENTRUST_SMART_CAPTURE_URL;
+import CrsEquifaxConnect from "../components/CrsEquifaxConnect";
 
 type PassportInitState = {
   status: "not_started" | "in_progress" | "complete";
   origin?: string;
   destination?: string;
+  residenceCountry?: string;
   fullName?: string;
   dob?: string; // YYYY-MM-DD
   purpose?: string; // LOAN/BANK/RENT/EMPLOYMENT
@@ -58,6 +59,14 @@ function mapPurpose(p: string | null): string {
   }
 }
 
+const localSandboxIdentityPolicy =
+  (import.meta.env.VITE_AUTH_MODE || "cognito") === "local";
+
+function identityStatusReady(status?: string | null) {
+  return status === "ENTRUST_APPROVED" || status === "PILOT_COMPLETED"
+    || (localSandboxIdentityPolicy && status === "ENTRUST_DECLINED");
+}
+
 export default function PassportInit() {
   const nav = useNavigate();
 
@@ -65,6 +74,7 @@ export default function PassportInit() {
 
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
+  const [residenceCountry, setResidenceCountry] = useState("");
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
   const [creditBureau, setCreditBureau] = useState(false);
@@ -74,6 +84,10 @@ export default function PassportInit() {
   );
   const [entrustStarted, setEntrustStarted] = useState(false);
   const [entrustCompleted, setEntrustCompleted] = useState(false);
+  const [entrustVerification, setEntrustVerification] = useState<EntrustVerification | null>(null);
+  const [identityStatus, setIdentityStatus] = useState<string | null | undefined>(
+    () => loadInit().identityStatus
+  );
   const [mode, setMode] = useState<"view" | "edit">(() => loadInit().mode || "edit");
   const [supersedesPassportId, setSupersedesPassportId] = useState<string | undefined>(
     () => loadInit().supersedesPassportId
@@ -86,6 +100,17 @@ export default function PassportInit() {
 
   const init = useMemo(() => loadInit(), []);
   const readOnly = mode === "view";
+  const sandboxIdentityReady = entrustVerification?.status === "APPROVED"
+    || (localSandboxIdentityPolicy && entrustVerification?.status === "DECLINED")
+    || identityStatusReady(identityStatus);
+
+  function identityDetailsChanged() {
+    setEntrustVerification(null);
+    setEntrustStarted(false);
+    setEntrustCompleted(false);
+    setIdentityStatus("REQUIRES_REVERIFICATION");
+    setSaveMessage(null);
+  }
 
   // Guard: require logged-in session
   useEffect(() => {
@@ -107,15 +132,15 @@ export default function PassportInit() {
     if (init?.status === "in_progress") {
       setOrigin(init.origin ?? "");
       setDestination(init.destination ?? "");
+      setResidenceCountry(init.residenceCountry ?? init.origin ?? "");
       setFullName(init.fullName ?? "");
       setDob(init.dob ?? "");
       setCreditBureau(!!init.sources?.creditBureau);
       setBank(!!init.sources?.bank);
       setPassportId(init.passportId);
       setSupersedesPassportId(init.supersedesPassportId);
-      setEntrustCompleted(
-        init.identityStatus === "ENTRUST_SUBMITTED" || init.identityStatus === "PILOT_COMPLETED"
-      );
+      setIdentityStatus(init.identityStatus);
+      setEntrustCompleted(identityStatusReady(init.identityStatus));
 
       if (init.startStep) {
         setStep(init.startStep);
@@ -137,6 +162,7 @@ export default function PassportInit() {
       status: "in_progress",
       origin,
       destination,
+      residenceCountry,
       fullName,
       dob,
       sources: { creditBureau, bank },
@@ -153,6 +179,7 @@ export default function PassportInit() {
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
       originCountry: origin,
       destCountry: destination,
+      residenceCountry,
       fullName: fullName.trim(),
       dob,
       currentSection,
@@ -160,21 +187,21 @@ export default function PassportInit() {
     persistInProgress({
       origin: saved.originCountry,
       destination: saved.destCountry,
+      residenceCountry: saved.residenceCountry,
       fullName: saved.fullName || "",
       dob: saved.dob || "",
       identityStatus: saved.identityStatus,
       identityCompletedAt: saved.identityCompletedAt,
     });
-    setEntrustCompleted(
-      saved.identityStatus === "ENTRUST_SUBMITTED" || saved.identityStatus === "PILOT_COMPLETED"
-    );
+    setIdentityStatus(saved.identityStatus);
+    setEntrustCompleted(identityStatusReady(saved.identityStatus));
     setSaveMessage("Saved to your passport");
     return saved;
   }
 
   async function saveProgress() {
     persistInProgress();
-    if (!origin || !destination || !fullName.trim() || !dob) {
+    if (!origin || !destination || !fullName.trim() || !dob || !residenceCountry) {
       setSaveMessage("Progress saved on this device");
       return;
     }
@@ -212,8 +239,13 @@ export default function PassportInit() {
   async function nextFromStep2() {
     setErr(null);
 
-    if (!fullName.trim() || !dob) {
-      setErr("Please enter your full name and date of birth.");
+    if (!fullName.trim() || !dob || !residenceCountry) {
+      setErr("Please enter your full name, date of birth and country of residence.");
+      return;
+    }
+
+    if (!sandboxIdentityReady) {
+      setErr("Complete the pilot identity verification before continuing.");
       return;
     }
 
@@ -254,40 +286,66 @@ export default function PassportInit() {
     } finally { setLoading(false); }
   }
 
-  function startEntrustVerification() {
+  async function startEntrustVerification() {
     setErr(null);
-
-    if (!ENTRUST_WORKFLOW_URL) {
-      setErr("Entrust verification URL is not configured.");
-      return;
-    }
-
-    setEntrustStarted(true);
-
-    window.open(
-      ENTRUST_WORKFLOW_URL,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  }
-
-  async function confirmEntrustCompletion() {
+    const captureWindow = window.open("", "_blank");
+    if (captureWindow) captureWindow.opener = null;
     setLoading(true);
-    setErr(null);
     try {
       const resolvedPassportId = await ensurePassportId();
       await saveDetails(resolvedPassportId);
-      const result = await recordEntrustSubmission(resolvedPassportId);
-      setEntrustCompleted(true);
-      persistInProgress({
-        identityStatus: result.identityStatus,
-        identityCompletedAt: result.completedAt,
-      });
-      setSaveMessage("Identity submission saved");
+      const result = await startEntrust(resolvedPassportId);
+      if (!result?.captureUrl) throw new Error("The identity service did not return a verification link.");
+      setEntrustVerification(result);
+      setEntrustStarted(true);
+      setIdentityStatus(`ENTRUST_${result.status}`);
+      if (captureWindow) {
+        captureWindow.location.href = result.captureUrl;
+      } else {
+        setErr("Your browser blocked the identity-verification window. Allow pop-ups and select Reopen verification.");
+      }
     } catch (error) {
-      setErr(error instanceof Error ? error.message : "Unable to save identity completion.");
+      captureWindow?.close();
+      setErr(error instanceof Error ? error.message : "Unable to start identity verification.");
     } finally { setLoading(false); }
   }
+
+  async function checkEntrustStatus() {
+    if (!passportId) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      const result = await refreshEntrustVerification(passportId);
+      setEntrustVerification(result);
+      const recorded = result?.status === "APPROVED"
+        || (localSandboxIdentityPolicy && result?.status === "DECLINED");
+      const nextIdentityStatus = result?.status ? `ENTRUST_${result.status}` : identityStatus;
+      setIdentityStatus(nextIdentityStatus);
+      setEntrustCompleted(recorded);
+      if (recorded) {
+        persistInProgress({ identityStatus: nextIdentityStatus, identityCompletedAt: result.completedAt });
+        setSaveMessage(result?.status === "APPROVED"
+          ? "Identity verified"
+          : "Pilot identity result recorded");
+      }
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Unable to check identity status.");
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => {
+    if (!passportId) return;
+    void getEntrustVerification(passportId)
+      .then((result) => {
+        if (!result) return;
+        setEntrustVerification(result);
+        setEntrustStarted(true);
+        setIdentityStatus(`ENTRUST_${result.status}`);
+        setEntrustCompleted(result.status === "APPROVED"
+          || (localSandboxIdentityPolicy && result.status === "DECLINED"));
+      })
+      .catch(() => undefined);
+  }, [passportId]);
 
   async function createPassport() {
     setErr(null);
@@ -298,13 +356,12 @@ export default function PassportInit() {
 
       // 1) reuse the draft created for provider connections, or create it now
       const resolvedPassportId = await ensurePassportId();
-      const savedPassport = await saveDetails(resolvedPassportId);
-      if (
-        savedPassport.identityStatus !== "ENTRUST_SUBMITTED" &&
-        savedPassport.identityStatus !== "PILOT_COMPLETED"
-      ) {
+      const saved = await saveDetails(resolvedPassportId);
+      const identityReadyToPublish = sandboxIdentityReady
+        || identityStatusReady(saved.identityStatus);
+      if (!identityReadyToPublish) {
         setStep(2);
-        throw new Error("Complete identity verification before publishing this passport.");
+        throw new Error("Complete the pilot identity verification before publishing this passport.");
       }
 
       // 2) connect sources (based on toggles)
@@ -326,6 +383,7 @@ export default function PassportInit() {
         passportId: resolvedPassportId,
         origin,
         destination,
+        residenceCountry,
         fullName: fullName.trim(),
         dob,
         sources: { creditBureau, bank },
@@ -334,8 +392,8 @@ export default function PassportInit() {
       saveInit(next);
 
       nav("/dashboard");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to create passport");
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Failed to create passport");
     } finally {
       setLoading(false);
     }
@@ -343,13 +401,14 @@ export default function PassportInit() {
 
   async function ensurePassportId(): Promise<string> {
     if (passportId) return passportId;
-    if (!origin || !destination || !fullName.trim() || !dob) {
+    if (!origin || !destination || !fullName.trim() || !dob || !residenceCountry) {
       throw new Error("Complete corridor and profile details before connecting a data source.");
     }
     const result = await initPassport({
       purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
       originCountry: origin,
       destCountry: destination,
+      residenceCountry,
       fullName: fullName.trim(),
       dob,
       supersedesPassportId: init.supersedesPassportId,
@@ -370,6 +429,7 @@ export default function PassportInit() {
         purpose: mapPurpose(localStorage.getItem("gcp.purpose")),
         originCountry: origin,
         destCountry: destination,
+        residenceCountry,
         fullName: fullName.trim(),
         dob,
         currentSection: section,
@@ -506,7 +566,7 @@ export default function PassportInit() {
             <div style={{ marginTop: 14 }}>
               <h3 className="task-title">Verify that this information belongs to you</h3>
               <div className="hint" style={{ textAlign: "left" }}>
-                Enter your basic profile details, then complete secure identity verification through Entrust.
+                Enter your basic profile details, then complete a secure identity verification.
               </div>
 
               <div className="label">Full Name</div>
@@ -514,7 +574,10 @@ export default function PassportInit() {
                 className="input"
                 disabled={readOnly}
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  identityDetailsChanged();
+                }}
                 placeholder="Your legal name"
               />
 
@@ -524,8 +587,26 @@ export default function PassportInit() {
                 disabled={readOnly}
                 type="date"
                 value={dob}
-                onChange={(e) => setDob(e.target.value)}
+                onChange={(e) => {
+                  setDob(e.target.value);
+                  identityDetailsChanged();
+                }}
               />
+
+              <div className="label">Country of Residence</div>
+              <select
+                className="input"
+                disabled={readOnly}
+                value={residenceCountry}
+                onChange={(e) => {
+                  setResidenceCountry(e.target.value);
+                  identityDetailsChanged();
+                }}
+              >
+                <option value="">Select country</option>
+                <option value="IN">India</option>
+                <option value="US">United States</option>
+              </select>
 
               <div
                 style={{
@@ -547,19 +628,19 @@ export default function PassportInit() {
                     marginTop: 6,
                   }}
                 >
-                  Complete a secure identity check. Entrust performs the verification for GCP.
+                  Complete a secure identity check for your Global Credit Passport.
                 </div>
 
                 {!entrustCompleted && <button
                   className="btn"
                   type="button"
                   disabled={readOnly}
-                  onClick={startEntrustVerification}
+                  onClick={() => void startEntrustVerification()}
                   style={{ marginTop: 12 }}
                 >
                   {entrustStarted
-                    ? "Reopen Entrust verification"
-                    : "Verify identity with Entrust"}
+                    ? "Reopen identity verification"
+                    : "Verify identity"}
                 </button>}
 
                 {entrustStarted && !entrustCompleted && (
@@ -568,19 +649,33 @@ export default function PassportInit() {
                       className="hint"
                       style={{ textAlign: "left" }}
                     >
-                      After Entrust displays “Thank you,” close that tab,
-                      return here and confirm that you completed the steps.
+                      Complete the identity steps in the opened tab, then return here and check the result.
                     </div>
 
                     <button
                       className="btn"
                       type="button"
                       disabled={loading}
-                      onClick={() => void confirmEntrustCompletion()}
+                      onClick={() => void checkEntrustStatus()}
                       style={{ marginTop: 10 }}
                     >
-                      {loading ? "Saving..." : "I have completed the Entrust steps"}
+                      {loading ? "Checking..." : "Check verification result"}
                     </button>
+                    {entrustVerification?.status === "PROCESSING" && (
+                      <div className="hint" style={{ textAlign: "left", marginTop: 8 }}>
+                        Your identity verification is being processed.
+                      </div>
+                    )}
+                    {entrustVerification?.status === "DECLINED" && (
+                      <div style={{ color: "#7a5d00", fontSize: 13, marginTop: 8 }}>
+                        The sandbox identity check returned a declined result. It is recorded and you may continue the pilot.
+                      </div>
+                    )}
+                    {entrustVerification?.status === "ERROR" && (
+                      <div style={{ color: "#b42318", fontSize: 13, marginTop: 8 }}>
+                        The identity service could not complete the verification{entrustVerification.providerError ? `: ${entrustVerification.providerError}` : "."}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -592,7 +687,9 @@ export default function PassportInit() {
                       marginTop: 12,
                     }}
                   >
-                    ✓ Entrust submission recorded — provider confirmation pending
+                    {identityStatus === "ENTRUST_DECLINED"
+                      ? "✓ Pilot identity result retained"
+                      : "✓ Identity verified"}
                   </div>
                 )}
               </div>
@@ -632,6 +729,19 @@ export default function PassportInit() {
                     persistInProgress({
                       sources: { creditBureau: true, bank },
                     });
+                  }}
+                />
+
+                <CrsEquifaxConnect
+                  readOnly={readOnly}
+                  passportId={passportId}
+                  fullName={fullName}
+                  dob={dob}
+                  destinationCountry={destination}
+                  ensurePassportId={ensurePassportId}
+                  onConnected={() => {
+                    setCreditBureau(true);
+                    persistInProgress({ sources: { creditBureau: true, bank } });
                   }}
                 />
 

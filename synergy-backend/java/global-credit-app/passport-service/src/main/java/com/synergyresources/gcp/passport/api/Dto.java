@@ -11,6 +11,7 @@ public class Dto {
     @NotBlank public String purpose;
     @NotBlank public String originCountry;
     @NotBlank public String destCountry;
+    public String residenceCountry;
     public String fullName;
     public LocalDate dob;
     public UUID supersedesPassportId;
@@ -22,6 +23,7 @@ public class Dto {
       String purpose,
       String originCountry,
       String destCountry,
+      String residenceCountry,
       String fullName,
       LocalDate dob,
       UUID supersedesPassportId,
@@ -49,14 +51,10 @@ public class Dto {
     @NotBlank public String purpose;
     @NotBlank public String originCountry;
     @NotBlank public String destCountry;
+    public String residenceCountry;
     @NotBlank public String fullName;
     @NotNull public LocalDate dob;
     public String currentSection;
   }
 
-  public record IdentitySubmissionResponse(
-      String identityStatus,
-      java.time.Instant completedAt
-  ) {
-  }
 }

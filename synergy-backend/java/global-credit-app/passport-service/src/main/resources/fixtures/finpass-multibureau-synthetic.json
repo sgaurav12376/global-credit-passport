@@ -1,0 +1,72 @@
+{
+  "success": true,
+  "status_code": 200,
+  "message": "Synthetic multi-bureau fixture",
+  "data": {
+    "doc_id": "replaced-at-runtime",
+    "results": {
+      "equifax": {
+        "success": true,
+        "status_code": 200,
+        "message": "Synthetic Equifax result",
+        "data": {
+          "client_id": "replaced-at-runtime",
+          "credit_score": "771",
+          "credit_report": { "CCRResponse": { "CIRReportDataLst": [ { "CIRReportData": {
+            "RetailAccountsSummary": { "NoOfAccounts": "2", "NoOfActiveAccounts": "1", "NoOfWriteOffs": "0", "TotalPastDue": "0", "TotalCreditLimit": "200000", "TotalBalanceAmount": "35000" },
+            "RetailAccountDetails": [
+              { "AccountNumber": "SYNTH-EQ-001", "AccountType": "Credit Card", "AccountStatus": "Current Account", "Balance": "35000", "PastDueAmount": "0", "CreditLimit": "200000", "DateOpened": "2020-01-10", "DateReported": "2026-09-01", "History48Months": [ { "PaymentStatus": "000" }, { "PaymentStatus": "STD" } ] },
+              { "AccountNumber": "SYNTH-EQ-002", "AccountType": "Personal Loan", "AccountStatus": "Closed Account", "Balance": "0", "PastDueAmount": "0", "HighCredit": "100000", "DateOpened": "2018-05-01", "DateReported": "2024-05-01" }
+            ],
+            "ScoreDetails": [ { "ScoringElements": [ { "Description": "Low credit utilization" } ] } ],
+            "EnquirySummary": { "Past12Months": "1" }
+          } } ] } }
+        }
+      },
+      "experian": {
+        "success": true,
+        "status_code": 200,
+        "message": "Synthetic Experian result",
+        "data": {
+          "client_id": "replaced-at-runtime",
+          "credit_score": "714",
+          "credit_report": {
+            "CAIS_Account": {
+              "CAIS_Summary": { "Credit_Account": { "CreditAccountTotal": "2", "CreditAccountActive": "1", "CreditAccountClosed": "1", "CreditAccountDefault": "0" }, "Total_Outstanding_Balance": { "Outstanding_Balance_All": "36000" } },
+              "CAIS_Account_DETAILS": [ { "Account_Number": "SYNTH-EX-001", "Account_Type": "Credit Card", "Account_Status": "Current", "Current_Balance": "36000", "Highest_Credit_or_Original_Loan_Amount": "200000", "Amount_Past_Due": "0", "Written_Off_Amt_Total": "0", "Open_Date": "2020-01-10", "Date_Reported": "2026-09-01", "CAIS_Account_History": [ { "Days_Past_Due": "0" } ] } ]
+            },
+            "TotalCAPS_Summary": { "TotalCAPSLast180Days": "2" }
+          }
+        }
+      },
+      "cibil": {
+        "success": true,
+        "status_code": 200,
+        "message": "Synthetic CIBIL result",
+        "data": {
+          "client_id": "replaced-at-runtime",
+          "credit_score": "673",
+          "credit_report": [ {
+            "response": { "consumerSummaryresp": { "accountSummary": { "totalAccounts": "2", "overdueAccounts": "0", "currentBalance": "34000", "highCreditAmount": "200000", "oldestDateOpened": "2018-05-01" }, "inquirySummary": { "totalInquiry": "2" } } },
+            "accounts": [ { "accountNumber": "SYNTH-CB-001", "accountType": "Credit Card", "dateClosed": "NA", "currentBalance": "34000", "highCreditAmount": "200000", "amountOverdue": "0", "woAmountTotal": "0", "dateOpened": "2020-01-10", "dateReported": "2026-09-01", "monthlyPayStatus": [ { "status": "000" } ] } ],
+            "scores": [ { "reasonCodes": [ { "reasonCodeName": "Recent repayment history" } ] } ]
+          } ]
+        }
+      },
+      "crif": {
+        "success": true,
+        "status_code": 200,
+        "message": "Synthetic CRIF result",
+        "data": {
+          "client_id": "replaced-at-runtime",
+          "credit_score": "11",
+          "credit_report": {
+            "ACCOUNTS-SUMMARY": { "PRIMARY-ACCOUNTS-SUMMARY": { "PRIMARY-NUMBER-OF-ACCOUNTS": "1", "PRIMARY-ACTIVE-NUMBER-OF-ACCOUNTS": "1", "PRIMARY-OVERDUE-NUMBER-OF-ACCOUNTS": "0", "PRIMARY-SECURED-NUMBER-OF-ACCOUNTS": "0", "PRIMARY-UNSECURED-NUMBER-OF-ACCOUNTS": "1", "PRIMARY-CURRENT-BALANCE": "33000", "PRIMARY-SANCTIONED-AMOUNT": "200000" }, "DERIVED-ATTRIBUTES": { "LENGTH-OF-CREDIT-HISTORY-YEAR": "6", "LENGTH-OF-CREDIT-HISTORY-MONTH": "8", "INQURIES-IN-LAST-SIX-MONTHS": "1" } },
+            "RESPONSES": { "RESPONSE": [ { "LOAN-DETAILS": { "ACCT-NUMBER": "SYNTH-CR-001", "ACCT-TYPE": "Credit Card", "ACCOUNT-STATUS": "Active", "CURRENT-BAL": "33000", "SANCTIONED-AMT": "200000", "OVERDUE-AMT": "0", "WRITE-OFF-AMT": "0", "COMBINED-PAYMENT-HISTORY": "SEP:2026,000/XXX", "DISBURSED-DT": "2020-01-10", "DATE-REPORTED": "2026-09-01" } } ] },
+            "SCORES": { "SCORE": { "SCORE-TYPE": "CRIF synthetic native model" } }
+          }
+        }
+      }
+    }
+  }
+}

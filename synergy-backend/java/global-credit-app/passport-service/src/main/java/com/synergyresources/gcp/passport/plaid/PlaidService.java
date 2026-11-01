@@ -53,6 +53,33 @@ public class PlaidService {
     );
   }
 
+  @Transactional(readOnly = true)
+  public LinkTokenResponse createAccountUpdateLinkToken(UUID borrowerId, String itemId) {
+    PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
+        .orElseThrow(() -> new IllegalArgumentException("Bank connection not found"));
+    JsonNode response = plaidClient.createAccountUpdateLinkToken(
+        borrowerId.toString(),
+        tokenCipher.decrypt(connection.getEncryptedAccessToken())
+    );
+    return new LinkTokenResponse(
+        response.path("link_token").asText(),
+        response.path("expiration").asText()
+    );
+  }
+
+  @Transactional
+  public ConnectionResult refreshAccounts(UUID borrowerId, String itemId) {
+    PlaidConnection connection = connectionRepo.findByBorrowerIdAndItemId(borrowerId, itemId)
+        .orElseThrow(() -> new IllegalArgumentException("Bank connection not found"));
+    String accessToken = tokenCipher.decrypt(connection.getEncryptedAccessToken());
+    JsonNode identity = plaidClient.getIdentity(accessToken);
+    connection.setIdentityAccounts(identity);
+    connectionRepo.save(connection);
+    dataNormalizer.normalizeAccounts(itemId, borrowerId, identity);
+    refreshTransactions(borrowerId, itemId);
+    return toResult(connection, 0, connection.getPassportId(), "REFRESHED");
+  }
+
   @Transactional
   public ConnectionResult connectAndFetch(UUID borrowerId, UUID passportId, String publicToken) {
     PlaidClient.TokenExchange exchange = plaidClient.exchangePublicToken(publicToken);

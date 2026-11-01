@@ -14,4 +14,9 @@ public interface PlaidFinancialSnapshotRepo
       UUID borrowerId,
       UUID passportId
   );
+
+  Optional<PlaidFinancialSnapshot> findFirstByBorrowerIdAndPassportIdOrderByCreatedAtDesc(
+      UUID borrowerId,
+      UUID passportId
+  );
 }

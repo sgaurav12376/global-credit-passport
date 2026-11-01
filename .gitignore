@@ -80,3 +80,5 @@ docker-compose.gcp.yml
 
 # Locally stored sensitive credit-report documents
 **/data/surepass-reports/
+
+synergy-backend/java/global-credit-app/passport-service/data/
