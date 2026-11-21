@@ -55,6 +55,8 @@ crs:
   base-url: ${CRS_BASE_URL:https://api-sandbox.stitchcredit.com/api}
   bearer-token: ${CRS_BEARER_TOKEN:}
   equifax-option: ${CRS_EQUIFAX_OPTION:}
+  experian-config: ${CRS_EXPERIAN_CONFIG:}
+  transunion-config: ${CRS_TRANSUNION_CONFIG:}
   inquiry-type: ${CRS_INQUIRY_TYPE:unconfirmed}
 
 entrust:

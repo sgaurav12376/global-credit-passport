@@ -1,0 +1,10 @@
+{
+  "headerRecord":[{"reportDate":"2026-10-31","reportCode":"SYNTHETIC"}],
+  "riskModel":[{"modelIndicator":"FICO8","score":"728","scoreFactors":[{"importance":"1","code":"REV_BAL"},{"importance":"2","code":"NEW_CREDIT"}]}],
+  "tradeline":[
+    {"accountNumber":"TEST1001","accountType":"REVOLVING","openOrClosed":"OPEN","balanceAmount":"4200","amountPastDue":"0","openDate":"62","balanceDate":"2026-10-31","enhancedPaymentData":{"creditLimitAmount":"15000","chargeoffAmount":"0"}},
+    {"accountNumber":"TEST1002","accountType":"INSTALLMENT","openOrClosed":"OPEN","balanceAmount":"9800","amountPastDue":"0","openDate":"39","balanceDate":"2026-10-31","enhancedPaymentData":{"highBalanceAmount":"18000","chargeoffAmount":"0"}}
+  ],
+  "customData":{"summaries":{"tradeSummary":{"tradesCount":"2","openTradesCount":"2","balanceTotal":"14000","highCreditTotal":"33000","oldestTradeline":"62","revolvingCreditUtilization":"28"},"derogatorySummary":{"chargeOffsCount":"0","collectionsCount":"0","bankruptciesCount":"0","publicRecordsCount":"0","get_30DayLates":"0","get_60DayLates":"0","get_90DayLates":"0","inquiriesCount":"2"}}},
+  "fixtureNotice":"Synthetic CRS Experian fixture; no external API call"
+}

@@ -4,5 +4,6 @@ import java.util.*;
 import org.springframework.data.jpa.repository.JpaRepository;
 public interface CrsCreditReportRepo extends JpaRepository<CrsCreditReport, UUID> {
   Optional<CrsCreditReport> findFirstByBorrowerIdAndPassportIdAndStatusOrderByCreatedAtDesc(UUID borrowerId, UUID passportId, String status);
+  Optional<CrsCreditReport> findFirstByBorrowerIdAndPassportIdAndBureauAndStatusOrderByCreatedAtDesc(UUID borrowerId, UUID passportId, String bureau, String status);
   List<CrsCreditReport> findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(UUID borrowerId, UUID passportId);
 }

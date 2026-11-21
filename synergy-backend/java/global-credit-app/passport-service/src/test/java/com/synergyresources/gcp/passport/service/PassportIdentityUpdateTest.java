@@ -11,12 +11,15 @@ import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PassportOutput;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
+import com.synergyresources.gcp.passport.model.CrsCreditReport;
 import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
+import com.synergyresources.gcp.passport.repo.CrsCreditReportRepo;
+import com.synergyresources.gcp.passport.repo.NormalizedEvidenceRepo;
 import java.time.LocalDate;
 import java.time.Instant;
 import java.util.List;
@@ -26,6 +29,54 @@ import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 
 class PassportIdentityUpdateTest {
+  @Test
+  void updateDraftCarriesLatestAvailableUsBureauRecords() {
+    UUID borrowerId = UUID.randomUUID();
+    UUID parentId = UUID.randomUUID();
+    PassportRepo passportRepo = mock(PassportRepo.class);
+    SurepassCreditReportRepo sourceCreditRepo = mock(SurepassCreditReportRepo.class);
+    CrsCreditReportRepo destinationCreditRepo = mock(CrsCreditReportRepo.class);
+    NormalizedEvidenceRepo evidenceRepo = mock(NormalizedEvidenceRepo.class);
+    Passport parent = passport(parentId, null);
+    CrsCreditReport equifax = usReport("EQUIFAX", "us-equifax-ref", 742);
+    CrsCreditReport transUnion = usReport("TRANSUNION", "us-transunion-ref", 751);
+
+    when(passportRepo.findByIdAndUserId(parentId, borrowerId)).thenReturn(Optional.of(parent));
+    when(destinationCreditRepo
+        .findFirstByBorrowerIdAndPassportIdAndBureauAndStatusOrderByCreatedAtDesc(
+            borrowerId, parentId, "EQUIFAX", "SUCCESS"))
+        .thenReturn(Optional.of(equifax));
+    when(destinationCreditRepo
+        .findFirstByBorrowerIdAndPassportIdAndBureauAndStatusOrderByCreatedAtDesc(
+            borrowerId, parentId, "TRANSUNION", "SUCCESS"))
+        .thenReturn(Optional.of(transUnion));
+    when(evidenceRepo.findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, parentId))
+        .thenReturn(List.of());
+
+    PassportService service = new PassportService(
+        passportRepo, mock(PassportSourceRepo.class),
+        mock(PlaidFinancialSnapshotService.class), mock(PassportPlaidConnectionRepo.class),
+        sourceCreditRepo, destinationCreditRepo, evidenceRepo,
+        mock(PassportOutputService.class), mock(EntrustVerificationRepo.class), true
+    );
+    Dto.InitRequest request = new Dto.InitRequest();
+    request.purpose = "LOAN";
+    request.originCountry = "IN";
+    request.destCountry = "US";
+    request.residenceCountry = "US";
+    request.fullName = "Same Person";
+    request.dob = LocalDate.of(1990, 1, 1);
+    request.supersedesPassportId = parentId;
+
+    service.init(borrowerId, request);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CrsCreditReport>> captor = ArgumentCaptor.forClass(List.class);
+    verify(destinationCreditRepo).saveAll(captor.capture());
+    assertEquals(List.of("EQUIFAX", "TRANSUNION"),
+        captor.getValue().stream().map(CrsCreditReport::getBureau).toList());
+  }
+
   @Test
   void updateDraftCarriesTheCompleteLatestCreditRequestBatch() {
     UUID borrowerId = UUID.randomUUID();
@@ -58,6 +109,8 @@ class PassportIdentityUpdateTest {
         mock(PlaidFinancialSnapshotService.class),
         plaidConnectionRepo,
         surepassRepo,
+        mock(CrsCreditReportRepo.class),
+        mock(NormalizedEvidenceRepo.class),
         mock(PassportOutputService.class),
         mock(EntrustVerificationRepo.class),
         true
@@ -114,6 +167,8 @@ class PassportIdentityUpdateTest {
         mock(PlaidFinancialSnapshotService.class),
         plaidConnectionRepo,
         surepassRepo,
+        mock(CrsCreditReportRepo.class),
+        mock(NormalizedEvidenceRepo.class),
         mock(PassportOutputService.class),
         entrustRepo,
         true
@@ -163,7 +218,8 @@ class PassportIdentityUpdateTest {
 
     PassportService service = new PassportService(
         passportRepo, mock(PassportSourceRepo.class), snapshotService,
-        plaidConnectionRepo, surepassRepo, outputService, entrustRepo, true
+        plaidConnectionRepo, surepassRepo, mock(CrsCreditReportRepo.class),
+        mock(NormalizedEvidenceRepo.class), outputService, entrustRepo, true
     );
 
     service.generate(borrowerId, draftId);
@@ -190,6 +246,20 @@ class PassportIdentityUpdateTest {
     when(report.getConsentVersion()).thenReturn("finpass-multi-bureau-imported-test-v1");
     when(report.getStatus()).thenReturn("SUCCESS");
     when(report.getCreatedAt()).thenReturn(createdAt);
+    return report;
+  }
+
+  private CrsCreditReport usReport(String bureau, String providerReference, int score) {
+    CrsCreditReport report = new CrsCreditReport();
+    report.setBureau(bureau);
+    report.setProviderReference(providerReference);
+    report.setCreditScore(score);
+    report.setConsentVersion("us-credit-v1");
+    report.setConsentedAt(Instant.parse("2026-11-01T20:00:00Z"));
+    report.setDataMode("fixture");
+    report.setPermissiblePurpose("CREDIT_TRANSACTION");
+    report.setInquiryType("UNCONFIRMED");
+    report.setStatus("SUCCESS");
     return report;
   }
 }

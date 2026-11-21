@@ -5,9 +5,9 @@ export function friendlyEvidenceSource(provider?: string | null, country?: strin
   if (synthetic || normalized.includes("SIMULATOR")) return `${region}credit history — simulated`;
   if (normalized.includes("PLAID")) return `${region}open-banking evidence`;
   if (normalized.includes("ENTRUST")) return "Identity verification";
-  if (normalized.includes("SUREPASS") || normalized.includes("CIBIL")) return `${region}credit-bureau evidence`;
+  if (normalized.includes("SUREPASS") || normalized.includes("CIBIL") || normalized.includes("CRS")) return `${region}credit-bureau evidence`;
   if (!provider) return "Evidence unavailable";
-  return `${region}verified financial evidence`;
+  return `${region}financial evidence`;
 }
 
 export function friendlyPassportStatus(status?: string | null) {

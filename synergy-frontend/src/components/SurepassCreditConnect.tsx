@@ -135,7 +135,7 @@ export default function SurepassCreditConnect({ readOnly = false, connected, pas
       setHistory((current) => [...result.reports, ...current.filter((item) => !result.reports.some((saved) => saved.reportId === item.reportId))]);
       onConnected();
       const available = result.outcomes.filter((item) => item.normalized).length;
-      setMessage(`Finpass provider test response imported: ${available} bureau${available === 1 ? "" : "s"} available.`);
+      setMessage(`Saved credit-bureau test response imported: ${available} bureau${available === 1 ? "" : "s"} available.`);
     } catch (error) {
       setMessage(error instanceof SyntaxError
         ? "The selected file is not valid JSON."
@@ -186,14 +186,14 @@ export default function SurepassCreditConnect({ readOnly = false, connected, pas
         </select>
         <button className="btn" type="button" disabled={busy} onClick={simulateMultiBureau} style={{ marginTop: 6 }}>
           {busy ? "Creating multi-bureau test..." : "Test multi-bureau report"}</button>
-        <div className="hint" style={{ color: "#9a6700", marginTop: 5 }}>Uses synthetic local fixture data · does not call Finpass or consume credits</div>
-        <div className="label" style={{ marginTop: 10 }}>Import saved Finpass provider response</div>
+        <div className="hint" style={{ color: "#9a6700", marginTop: 5 }}>Uses synthetic local fixture data · does not call an external bureau service or consume credits</div>
+        <div className="label" style={{ marginTop: 10 }}>Import saved credit-bureau response</div>
         <label className="btn" style={{ display: "inline-block", marginTop: 6 }}>
-          {busy ? "Importing response..." : "Choose Finpass JSON file"}
+          {busy ? "Importing response..." : "Choose credit-bureau JSON file"}
           <input type="file" accept="application/json,.json" disabled={busy} style={{ display: "none" }}
             onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void importProviderTestResponse(file); }}/>
         </label>
-        <div className="hint" style={{ color: "#9a6700", marginTop: 5 }}>Local development only · imports a previously captured provider test response · does not call Finpass or consume credits</div>
+        <div className="hint" style={{ color: "#9a6700", marginTop: 5 }}>Local development only · imports a previously captured test response · does not call an external bureau service or consume credits</div>
       </div>}
     </> : <div style={{ maxHeight: 360, overflowY: "auto", textAlign: "left", marginTop: 9 }}>
       <div className="hint" style={{ marginBottom: 8 }}>One consented request checks the supported Indian credit bureaus. Available results are standardized automatically; an unavailable bureau is not treated as negative information.</div>

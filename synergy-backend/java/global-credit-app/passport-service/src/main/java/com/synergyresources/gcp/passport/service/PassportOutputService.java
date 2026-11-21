@@ -163,7 +163,7 @@ public class PassportOutputService {
         "CREDIT".equals(item.getDomain()) && "US".equalsIgnoreCase(item.getCountryCode())
             && "CRS".equals(item.getProvider())
             && item.getProviderReference() != null
-            && item.getProviderReference().startsWith("crs-equifax-fixture")
+            && item.getProviderReference().matches("crs-(equifax|experian|transunion)-fixture.*")
     ));
     evidenceEnvironment.put("openBankingSandbox",
         plaid != null && "sandbox".equalsIgnoreCase(plaidEnvironment));

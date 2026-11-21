@@ -1,0 +1,6 @@
+{
+  "fileNumber":"SYNTHETIC-TU-FILE",
+  "fileSummary":{"fileHitIndicator":"REGULAR_HIT","fileMatchIndicator":"BEST_MATCH"},
+  "customData":{"nativeScore":751,"scoreFactors":["AGE_OF_ACCOUNTS","REVOLVING_BALANCES"],"creditSummary":{"totalAccounts":3,"openAccounts":2,"closedAccounts":1,"delinquentAccounts":0,"totalBalance":16750,"totalCreditLimit":42000,"creditHistoryMonths":73,"recentInquiries":1,"maximumDaysPastDue":0,"chargeOffAccounts":0},"accounts":[{"accountNumber":"TU0001001","accountType":"REVOLVING","status":"OPEN","balance":6750,"creditLimit":22000,"pastDue":0,"chargeOff":0,"maximumDaysPastDue":0,"dateOpened":"2020-09-01","dateReported":"2026-10-31"},{"accountNumber":"TU0001002","accountType":"INSTALLMENT","status":"OPEN","balance":10000,"creditLimit":20000,"pastDue":0,"chargeOff":0,"maximumDaysPastDue":0,"dateOpened":"2019-09-01","dateReported":"2026-10-31"}]},
+  "fixtureNotice":"Synthetic CRS TransUnion fixture; no external API call"
+}

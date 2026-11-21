@@ -12,4 +12,10 @@ class CrsEquifaxNormalizerTest {
     assertEquals(6,report.summary().totalAccounts()); assertEquals(4,report.summary().activeAccounts());
     assertEquals(54,report.summary().creditHistoryMonths()); assertEquals(1,report.summary().recentEnquiries());
   }
+  @Test void normalizesDocumentedTradesAndReasons() throws Exception {
+    try(var in=getClass().getResourceAsStream("/fixtures/crs-equifax-synthetic.json")){
+      var report=new CrsEquifaxNormalizer().normalize(new ObjectMapper().readTree(in),"fixture");
+      assertEquals(2,report.tradelines().size());assertFalse(report.scoreFactors().isEmpty());assertEquals(1,report.summary().recentEnquiries());
+    }
+  }
 }

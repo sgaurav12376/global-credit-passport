@@ -2,6 +2,12 @@
   "pdfReportId": "crs-equifax-fixture",
   "data": {
     "creditScore": 742,
+    "models": [{"type":"EDAS","modelNumber":"FICO8","score":742,"reasons":[{"code":"REV_BAL"},{"code":"RECENT_INQ"}]}],
+    "trades": [
+      {"accountNumber":"EQ0001001","dateOpened":"64","dateReported":"2026-10-31","highCredit":"24000","balance":"8200","pastDue":"0","typeCode":"R","typeCodeDescription":"REVOLVING","rating":"1","ratingCodeDescription":"OPEN CURRENT","daysDel30":"0","daysDel60":"0","daysDel90":"0"},
+      {"accountNumber":"EQ0001002","dateOpened":"48","dateReported":"2026-10-31","highCredit":"38000","balance":"10200","pastDue":"0","typeCode":"I","typeCodeDescription":"INSTALLMENT","rating":"1","ratingCodeDescription":"OPEN CURRENT","daysDel30":"0","daysDel60":"0","daysDel90":"0"}
+    ],
+    "inquiries": [{"type":"credit","customerName":"SYNTHETIC LENDER"}],
     "summary": {
       "totalAccounts": 6,
       "activeAccounts": 4,

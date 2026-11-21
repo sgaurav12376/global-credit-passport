@@ -153,7 +153,7 @@ export async function importFinpassTestResponse(
       }),
     }
   );
-  return responseJson<MultiBureauCreditResult>(response, "Import Finpass provider test response");
+  return responseJson<MultiBureauCreditResult>(response, "Import saved credit-bureau test response");
 }
 
 export async function downloadSurepassCreditReport(reportId: string) {

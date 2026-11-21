@@ -5,11 +5,15 @@ import com.synergyresources.gcp.passport.model.Passport;
 import com.synergyresources.gcp.passport.model.PassportPlaidConnection;
 import com.synergyresources.gcp.passport.model.PassportSource;
 import com.synergyresources.gcp.passport.model.SurepassCreditReport;
+import com.synergyresources.gcp.passport.model.CrsCreditReport;
+import com.synergyresources.gcp.passport.model.NormalizedEvidence;
 import com.synergyresources.gcp.passport.model.EntrustVerification;
 import com.synergyresources.gcp.passport.repo.PassportRepo;
 import com.synergyresources.gcp.passport.repo.PassportSourceRepo;
 import com.synergyresources.gcp.passport.repo.PassportPlaidConnectionRepo;
 import com.synergyresources.gcp.passport.repo.SurepassCreditReportRepo;
+import com.synergyresources.gcp.passport.repo.CrsCreditReportRepo;
+import com.synergyresources.gcp.passport.repo.NormalizedEvidenceRepo;
 import com.synergyresources.gcp.passport.repo.EntrustVerificationRepo;
 import com.synergyresources.gcp.passport.plaid.PlaidFinancialSnapshotService;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +33,8 @@ public class PassportService {
   private final PlaidFinancialSnapshotService plaidSnapshotService;
   private final PassportPlaidConnectionRepo passportPlaidConnectionRepo;
   private final SurepassCreditReportRepo surepassReportRepo;
+  private final CrsCreditReportRepo crsCreditReportRepo;
+  private final NormalizedEvidenceRepo normalizedEvidenceRepo;
   private final PassportOutputService passportOutputService;
   private final boolean sandboxIdentityPolicy;
   private final EntrustVerificationRepo entrustVerificationRepo;
@@ -39,6 +45,8 @@ public class PassportService {
       PlaidFinancialSnapshotService plaidSnapshotService,
       PassportPlaidConnectionRepo passportPlaidConnectionRepo,
       SurepassCreditReportRepo surepassReportRepo,
+      CrsCreditReportRepo crsCreditReportRepo,
+      NormalizedEvidenceRepo normalizedEvidenceRepo,
       PassportOutputService passportOutputService,
       EntrustVerificationRepo entrustVerificationRepo,
       @Value("${gcp.pilot.sandbox-identity-policy:true}") boolean sandboxIdentityPolicy
@@ -48,6 +56,8 @@ public class PassportService {
     this.plaidSnapshotService = plaidSnapshotService;
     this.passportPlaidConnectionRepo = passportPlaidConnectionRepo;
     this.surepassReportRepo = surepassReportRepo;
+    this.crsCreditReportRepo = crsCreditReportRepo;
+    this.normalizedEvidenceRepo = normalizedEvidenceRepo;
     this.passportOutputService = passportOutputService;
     this.entrustVerificationRepo = entrustVerificationRepo;
     this.sandboxIdentityPolicy = sandboxIdentityPolicy;
@@ -127,9 +137,77 @@ public class PassportService {
         return carried;
       }).toList();
       surepassReportRepo.saveAll(carriedCreditReports);
+
+      carryDestinationCredit(userId, supersededPassport.getId(), p.getId());
     }
 
     return new Dto.InitResponse(p.getId(), p.getStatus());
+  }
+
+  private void carryDestinationCredit(UUID borrowerId, UUID sourcePassportId, UUID draftPassportId) {
+    boolean alreadyCarried = List.of("EQUIFAX", "EXPERIAN", "TRANSUNION").stream()
+        .anyMatch(bureau -> crsCreditReportRepo
+            .findFirstByBorrowerIdAndPassportIdAndBureauAndStatusOrderByCreatedAtDesc(
+                borrowerId, draftPassportId, bureau, "SUCCESS"
+            ).isPresent());
+    if (alreadyCarried) return;
+
+    List<CrsCreditReport> carriedReports = List.of("EQUIFAX", "EXPERIAN", "TRANSUNION")
+        .stream()
+        .map(bureau -> crsCreditReportRepo
+            .findFirstByBorrowerIdAndPassportIdAndBureauAndStatusOrderByCreatedAtDesc(
+                borrowerId, sourcePassportId, bureau, "SUCCESS"
+            ))
+        .flatMap(Optional::stream)
+        .map(previous -> {
+          CrsCreditReport carried = new CrsCreditReport();
+          carried.setBorrowerId(borrowerId);
+          carried.setPassportId(draftPassportId);
+          carried.setBureau(previous.getBureau());
+          carried.setProviderReference(previous.getProviderReference());
+          carried.setRequestId(previous.getRequestId());
+          carried.setCreditScore(previous.getCreditScore());
+          carried.setNormalizedReport(previous.getNormalizedReport());
+          carried.setConsentVersion(previous.getConsentVersion());
+          carried.setConsentedAt(previous.getConsentedAt());
+          carried.setDataMode(previous.getDataMode());
+          carried.setPermissiblePurpose(previous.getPermissiblePurpose());
+          carried.setInquiryType(previous.getInquiryType());
+          carried.setStatus("SUCCESS");
+          return carried;
+        })
+        .toList();
+    crsCreditReportRepo.saveAll(carriedReports);
+
+    var carriedReferences = carriedReports.stream()
+        .map(CrsCreditReport::getProviderReference)
+        .filter(Objects::nonNull)
+        .collect(java.util.stream.Collectors.toSet());
+    List<NormalizedEvidence> carriedEvidence = normalizedEvidenceRepo
+        .findByBorrowerIdAndPassportIdOrderByCreatedAtDesc(borrowerId, sourcePassportId)
+        .stream()
+        .filter(item -> "CREDIT".equals(item.getDomain()))
+        .filter(item -> "US".equalsIgnoreCase(item.getCountryCode()))
+        .filter(item -> carriedReferences.contains(item.getProviderReference()))
+        .map(previous -> {
+          NormalizedEvidence carried = new NormalizedEvidence();
+          carried.setBorrowerId(borrowerId);
+          carried.setPassportId(draftPassportId);
+          carried.setDomain(previous.getDomain());
+          carried.setCountryCode(previous.getCountryCode());
+          carried.setProvider(previous.getProvider());
+          carried.setSourceSystem(previous.getSourceSystem());
+          carried.setProviderReference(previous.getProviderReference());
+          carried.setSchemaVersion(previous.getSchemaVersion());
+          carried.setAdapterId(previous.getAdapterId());
+          carried.setAdapterVersion(previous.getAdapterVersion());
+          carried.setCompletenessPercent(previous.getCompletenessPercent());
+          carried.setPayload(previous.getPayload());
+          carried.setRetrievedAt(previous.getRetrievedAt());
+          return carried;
+        })
+        .toList();
+    normalizedEvidenceRepo.saveAll(carriedEvidence);
   }
 
   /**
@@ -167,7 +245,10 @@ public class PassportService {
         .findFirstByUserIdAndSupersedesPassportIdAndStatusOrderByCreatedAtDesc(
             userId, sourcePassportId, "IN_PROGRESS"
         )
-        .map(existing -> new Dto.InitResponse(existing.getId(), existing.getStatus()))
+        .map(existing -> {
+          carryDestinationCredit(userId, sourcePassportId, existing.getId());
+          return new Dto.InitResponse(existing.getId(), existing.getStatus());
+        })
         .orElseGet(() -> {
           Dto.InitRequest request = new Dto.InitRequest();
           request.purpose = source.getPurpose();

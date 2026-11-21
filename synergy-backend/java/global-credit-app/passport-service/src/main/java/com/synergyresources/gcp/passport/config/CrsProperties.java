@@ -9,6 +9,8 @@ public record CrsProperties(
     String baseUrl,
     String bearerToken,
     String equifaxOption,
+    String experianConfig,
+    String transunionConfig,
     String inquiryType
 ) {
   public boolean fixtureMode() { return "fixture".equalsIgnoreCase(dataMode); }
