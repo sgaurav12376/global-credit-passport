@@ -174,6 +174,8 @@ export type PassportOutput = {
         sourceCountry: string | null;
         evidenceId: string | null;
         evidenceStatus: "SYNTHETIC" | "NORMALIZED_PROVIDER_EVIDENCE" | "MISSING";
+        evidenceRole?: "DESTINATION_PRIMARY" | "SOURCE_FALLBACK" | "OTHER_COUNTRY" | "UNAVAILABLE";
+        selectionReason?: string;
         scoringRule: string;
         score: number | null;
         configuredWeight: number;
@@ -185,6 +187,8 @@ export type PassportOutput = {
         countryCode: string;
         completenessPercent: number;
         retrievedAt: string | null;
+        evidenceRole?: "DESTINATION_PRIMARY" | "SOURCE_FALLBACK" | "OTHER_COUNTRY" | "UNAVAILABLE";
+        selectionReason?: string;
         selectionMethod: string;
         explanation: string;
       } | null;

@@ -178,7 +178,8 @@ public class PassportOutputService {
     document.set("creditReconciliation", objectMapper.valueToTree(reconciliation));
     document.set("riskAssessment", objectMapper.valueToTree(
         riskAssessmentService.assess(
-            normalized.evidence(), normalized.coverage(), reconciliation
+        normalized.evidence(), normalized.coverage(), reconciliation,
+        passport.getOriginCountry(), passport.getDestCountry()
         )
     ));
     var normalizedEvidence = document.putArray("normalizedEvidence");

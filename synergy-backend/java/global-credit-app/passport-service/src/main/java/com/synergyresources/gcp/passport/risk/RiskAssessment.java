@@ -46,6 +46,8 @@ public record RiskAssessment(
       String sourceCountry,
       UUID evidenceId,
       String evidenceStatus,
+      String evidenceRole,
+      String selectionReason,
       String scoringRule,
       Integer score,
       int configuredWeight,
@@ -58,6 +60,8 @@ public record RiskAssessment(
       String countryCode,
       int completenessPercent,
       Instant retrievedAt,
+      String evidenceRole,
+      String selectionReason,
       String selectionMethod,
       String explanation
   ) {}

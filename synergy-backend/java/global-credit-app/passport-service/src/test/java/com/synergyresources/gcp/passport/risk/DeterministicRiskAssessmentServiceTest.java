@@ -39,8 +39,8 @@ class DeterministicRiskAssessmentServiceTest {
 
     assertEquals("CALCULATED", result.status());
     assertNotNull(result.riskIndex());
-    assertEquals("GCP_RISK_ASSESSMENT_V6", result.schemaVersion());
-    assertEquals("GCP_RULES_V1_6", result.modelVersion());
+    assertEquals("GCP_RISK_ASSESSMENT_V7", result.schemaVersion());
+    assertEquals("GCP_RULES_V1_7", result.modelVersion());
     assertEquals(7, result.dimensions().stream().filter(RiskAssessment.Dimension::available).count());
     assertTrue(result.confidence().score() < result.riskIndex());
     assertEquals(25, result.confidence().identityAssuranceComponent());
@@ -194,12 +194,14 @@ class DeterministicRiskAssessmentServiceTest {
         "creditHistoryMonths":96,"recentEnquiries":1}}
         """);
     equifax.setSourceSystem("EQUIFAX");
+    equifax.setRetrievedAt(Instant.now());
     NormalizedEvidence cibil = evidence("CREDIT", 100, """
         {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
         "writtenOffAccounts":0,"currentBalance":34000,"sanctionedAmount":200000,
         "creditHistoryMonths":96,"recentEnquiries":2}}
         """);
     cibil.setSourceSystem("CIBIL");
+    cibil.setRetrievedAt(Instant.now().minusSeconds(86400));
     List<NormalizedEvidence> all = List.of(equifax, cibil);
 
     RiskAssessment result = service.assess(
@@ -266,6 +268,62 @@ class DeterministicRiskAssessmentServiceTest {
     );
 
     assertEquals("EQUIFAX", result.assessmentEvidence().sourceSystem());
+  }
+
+  @Test
+  void prefersVerifiedDestinationCreditAndFallsBackPerFactor() throws Exception {
+    NormalizedEvidence source = evidence("CREDIT", 100, """
+        {"summary":{"maximumDaysPastDue":60,"overdueOrDefaultAccounts":1,
+        "writtenOffAccounts":0,"currentBalance":90000,"sanctionedAmount":100000,
+        "creditHistoryMonths":120,"recentEnquiries":4}}
+        """);
+    source.setCountryCode("IN");
+    source.setSourceSystem("EQUIFAX");
+    NormalizedEvidence destination = evidence("CREDIT", 90, """
+        {"summary":{"maximumDaysPastDue":0,"overdueOrDefaultAccounts":0,
+        "writtenOffAccounts":0,"creditHistoryMonths":48,"recentEnquiries":1}}
+        """);
+    destination.setCountryCode("US");
+    destination.setProvider("CRS");
+    destination.setSourceSystem("EXPERIAN");
+    List<NormalizedEvidence> all = List.of(source, destination);
+
+    RiskAssessment result = service.assess(all,
+        new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all, "IN"), "IN", "US");
+
+    assertEquals("US", result.assessmentEvidence().countryCode());
+    assertEquals("DESTINATION_PRIMARY", result.assessmentEvidence().evidenceRole());
+    assertEquals("US", explanation(result, "REPAYMENT_BEHAVIOR").sourceCountry());
+    assertEquals("IN", explanation(result, "CREDIT_UTILIZATION").sourceCountry());
+    assertEquals("SOURCE_FALLBACK", explanation(result, "CREDIT_UTILIZATION").evidenceRole());
+  }
+
+  @Test
+  void prefersDestinationCashflowAndFlagsUnverifiedSourceObligations() throws Exception {
+    NormalizedEvidence source = evidence("CASHFLOW", 100, """
+        {"metrics":{"averageMonthlyIncome":5000,"averageMonthlyDebtPayments":1000,
+        "averageMonthlyNetCashflow":1000,"incomeStabilityPercent":80}}
+        """);
+    source.setCountryCode("IN");
+    NormalizedEvidence destination = evidence("CASHFLOW", 90, """
+        {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":300,
+        "averageMonthlyNetCashflow":1800,"incomeStabilityPercent":95}}
+        """);
+    destination.setCountryCode("US");
+    List<NormalizedEvidence> all = List.of(source, destination);
+
+    RiskAssessment result = service.assess(all,
+        new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all, "IN"), "IN", "US");
+
+    assertEquals("US", explanation(result, "DEBT_BURDEN").sourceCountry());
+    assertEquals("DESTINATION_PRIMARY", explanation(result, "CASHFLOW_CAPACITY").evidenceRole());
+  }
+
+  private RiskAssessment.DimensionExplanation explanation(RiskAssessment result, String key) {
+    return result.dimensionExplanations().stream()
+        .filter(item -> key.equals(item.dimensionKey())).findFirst().orElseThrow();
   }
 
   private NormalizedEvidence evidence(String domain, int completeness, String json) throws Exception {

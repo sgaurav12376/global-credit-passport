@@ -17,23 +17,50 @@ import java.util.LinkedHashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DeterministicRiskAssessmentService {
-  public static final String MODEL_VERSION = "GCP_RULES_V1_6";
+  public static final String MODEL_VERSION = "GCP_RULES_V1_7";
 
   public RiskAssessment assess(
       List<NormalizedEvidence> evidence,
       EvidenceCoverage coverage,
       CreditBureauReconciliation reconciliation
   ) {
-    NormalizedEvidence credit = bestCredit(evidence);
-    NormalizedEvidence cashflow = best(evidence, "CASHFLOW");
+    return assess(evidence, coverage, reconciliation, null, null);
+  }
+
+  public RiskAssessment assess(
+      List<NormalizedEvidence> evidence,
+      EvidenceCoverage coverage,
+      CreditBureauReconciliation reconciliation,
+      String originCountry,
+      String destinationCountry
+  ) {
+    NormalizedEvidence repaymentCredit = bestCredit(evidence, originCountry, destinationCountry,
+        item -> hasAny(item, "summary", "maximumDaysPastDue", "overdueOrDefaultAccounts", "writtenOffAccounts"));
+    NormalizedEvidence utilizationCredit = bestCredit(evidence, originCountry, destinationCountry,
+        item -> hasPositive(item, "summary", "sanctionedAmount") && has(item, "summary", "currentBalance"));
+    NormalizedEvidence historyCredit = bestCredit(evidence, originCountry, destinationCountry,
+        item -> has(item, "summary", "creditHistoryMonths"));
+    NormalizedEvidence enquiriesCredit = bestCredit(evidence, originCountry, destinationCountry,
+        item -> has(item, "summary", "recentEnquiries"));
+    NormalizedEvidence primaryCredit = bestCredit(evidence, originCountry, destinationCountry,
+        item -> hasAny(item, "summary", "maximumDaysPastDue", "overdueOrDefaultAccounts",
+            "writtenOffAccounts", "currentBalance", "sanctionedAmount",
+            "creditHistoryMonths", "recentEnquiries"));
+    NormalizedEvidence debtCashflow = bestCashflowWithFallback(evidence, originCountry, destinationCountry,
+        item -> hasPositive(item, "metrics", "averageMonthlyIncome") && has(item, "metrics", "averageMonthlyDebtPayments"));
+    NormalizedEvidence capacityCashflow = bestCashflowWithFallback(evidence, originCountry, destinationCountry,
+        item -> hasPositive(item, "metrics", "averageMonthlyIncome") && has(item, "metrics", "averageMonthlyNetCashflow"));
+    NormalizedEvidence stabilityCashflow = bestCashflowWithFallback(evidence, originCountry, destinationCountry,
+        item -> has(item, "metrics", "incomeStabilityPercent"));
     List<RiskAssessment.Dimension> dimensions = List.of(
-        repayment(credit), utilization(credit), debtBurden(cashflow),
-        cashflowCapacity(cashflow), incomeStability(cashflow), historyDepth(credit),
-        recentEnquiries(credit)
+        repayment(repaymentCredit), utilization(utilizationCredit), debtBurden(debtCashflow),
+        cashflowCapacity(capacityCashflow), incomeStability(stabilityCashflow), historyDepth(historyCredit),
+        recentEnquiries(enquiriesCredit)
     );
     List<String> missing = dimensions.stream().filter(dimension -> !dimension.available())
         .map(RiskAssessment.Dimension::key).toList();
@@ -52,18 +79,19 @@ public class DeterministicRiskAssessmentService {
     );
     List<RiskAssessment.Driver> drivers = keyDrivers(dimensions);
     RiskAssessment.ReviewGuidance guidance = reviewGuidance(
-        index, coverage, reconciliation, dimensions, evidence
+        index, coverage, reconciliation, dimensions, evidence, originCountry, destinationCountry
     );
     List<RiskAssessment.DimensionExplanation> explanations = dimensionExplanations(
-        dimensions, credit, cashflow
+        dimensions, repaymentCredit, utilizationCredit, debtCashflow, capacityCashflow,
+        stabilityCashflow, historyCredit, enquiriesCredit, originCountry, destinationCountry
     );
     return new RiskAssessment(
-        "GCP_RISK_ASSESSMENT_V6", "DETERMINISTIC_RULES", MODEL_VERSION,
+        "GCP_RISK_ASSESSMENT_V7", "DETERMINISTIC_RULES", MODEL_VERSION,
         status, index, riskBand(index), confidence(
             evidence, coverage, reconciliation, dimensions,
-            isSynthetic(credit) || isSynthetic(cashflow)
+            explanations.stream().anyMatch(item -> "SYNTHETIC".equals(item.evidenceStatus()))
         ),
-        dimensions, explanations, assessmentEvidence(credit), crossBorderContext(evidence), scoreReferences,
+        dimensions, explanations, assessmentEvidence(primaryCredit, originCountry, destinationCountry), crossBorderContext(evidence), scoreReferences,
         drivers, guidance, missing, trace,
         List.copyOf(disclosures), Instant.now()
     );
@@ -71,38 +99,57 @@ public class DeterministicRiskAssessmentService {
 
   private List<RiskAssessment.DimensionExplanation> dimensionExplanations(
       List<RiskAssessment.Dimension> dimensions,
-      NormalizedEvidence credit,
-      NormalizedEvidence cashflow
+      NormalizedEvidence repaymentCredit,
+      NormalizedEvidence utilizationCredit,
+      NormalizedEvidence debtCashflow,
+      NormalizedEvidence capacityCashflow,
+      NormalizedEvidence stabilityCashflow,
+      NormalizedEvidence historyCredit,
+      NormalizedEvidence enquiriesCredit,
+      String originCountry,
+      String destinationCountry
   ) {
     return dimensions.stream().map(dimension -> switch (dimension.key()) {
-      case "REPAYMENT_BEHAVIOR" -> explanation(dimension, credit,
-          "credit.repayment_behavior", repaymentObserved(credit), "ACCOUNT_STATUS",
+      case "REPAYMENT_BEHAVIOR" -> explanation(dimension, repaymentCredit,
+          "credit.repayment_behavior", repaymentObserved(repaymentCredit), "ACCOUNT_STATUS",
           "Starts at 100; deductions apply for days past due, overdue/default and write-offs");
-      case "CREDIT_UTILIZATION" -> explanation(dimension, credit,
-          "credit.utilization_ratio", ratioObserved(credit, "summary", "currentBalance",
+      case "CREDIT_UTILIZATION" -> explanation(dimension, utilizationCredit,
+          "credit.utilization_ratio", ratioObserved(utilizationCredit, "summary", "currentBalance",
               "sanctionedAmount"), "PERCENT",
           "≤10%=95; ≤30%=85; ≤50%=70; ≤75%=50; >75%=25");
-      case "DEBT_BURDEN" -> explanation(dimension, cashflow,
-          "cashflow.debt_to_income_ratio", ratioObserved(cashflow, "metrics",
+      case "DEBT_BURDEN" -> explanation(dimension, debtCashflow,
+          "cashflow.debt_to_income_ratio", ratioObserved(debtCashflow, "metrics",
               "averageMonthlyDebtPayments", "averageMonthlyIncome"), "PERCENT",
           "≤15%=95; ≤30%=80; ≤45%=60; ≤60%=40; >60%=20");
-      case "CASHFLOW_CAPACITY" -> explanation(dimension, cashflow,
-          "cashflow.net_cashflow_to_income_ratio", ratioObserved(cashflow, "metrics",
+      case "CASHFLOW_CAPACITY" -> explanation(dimension, capacityCashflow,
+          "cashflow.net_cashflow_to_income_ratio", ratioObserved(capacityCashflow, "metrics",
               "averageMonthlyNetCashflow", "averageMonthlyIncome"), "PERCENT",
           "≥30%=95; ≥15%=80; ≥0%=60; ≥-10%=35; <-10%=15");
-      case "INCOME_STABILITY" -> explanation(dimension, cashflow,
-          "cashflow.income_stability_percent", fieldObserved(cashflow, "metrics",
+      case "INCOME_STABILITY" -> explanation(dimension, stabilityCashflow,
+          "cashflow.income_stability_percent", fieldObserved(stabilityCashflow, "metrics",
               "incomeStabilityPercent"), "PERCENT",
           "Normalized stability percentage is clamped to the 0–100 scoring range");
-      case "CREDIT_HISTORY_DEPTH" -> explanation(dimension, credit,
-          "credit.history_months", fieldObserved(credit, "summary", "creditHistoryMonths"),
+      case "CREDIT_HISTORY_DEPTH" -> explanation(dimension, historyCredit,
+          "credit.history_months", fieldObserved(historyCredit, "summary", "creditHistoryMonths"),
           "MONTHS", "≥120=95; ≥60=85; ≥36=75; ≥24=65; ≥12=50; <12=30");
-      case "RECENT_CREDIT_ENQUIRIES" -> explanation(dimension, credit,
-          "credit.recent_enquiries", fieldObserved(credit, "summary", "recentEnquiries"),
+      case "RECENT_CREDIT_ENQUIRIES" -> explanation(dimension, enquiriesCredit,
+          "credit.recent_enquiries", fieldObserved(enquiriesCredit, "summary", "recentEnquiries"),
           "COUNT", "0=95; 1–2=85; 3–4=70; 5–6=50; 7–10=30; >10=15");
       default -> explanation(dimension, null, dimension.key().toLowerCase(), null,
           "UNAVAILABLE", "No scoring rule recorded");
-    }).toList();
+    }).map(item -> withSelection(item, originCountry, destinationCountry)).toList();
+  }
+
+  private RiskAssessment.DimensionExplanation withSelection(
+      RiskAssessment.DimensionExplanation item, String originCountry, String destinationCountry
+  ) {
+    String role = evidenceRole(item.sourceCountry(), originCountry, destinationCountry);
+    String reason = "SYNTHETIC".equals(item.evidenceStatus())
+        ? "SYNTHETIC_TEST_EVIDENCE" : selectionReason(item.sourceCountry(), originCountry, destinationCountry);
+    return new RiskAssessment.DimensionExplanation(item.dimensionKey(), item.standardizedMetric(),
+        item.observedValue(), item.unit(), item.sourceDomain(), item.sourceProvider(), item.sourceSystem(),
+        item.sourceCountry(), item.evidenceId(), item.evidenceStatus(), role, reason, item.scoringRule(),
+        item.score(), item.configuredWeight(), item.weightedContribution());
   }
 
   private RiskAssessment.DimensionExplanation explanation(
@@ -114,10 +161,7 @@ public class DeterministicRiskAssessmentService {
       String rule
   ) {
     String evidenceStatus = source == null ? "MISSING"
-        : "GCP_SIMULATOR".equals(source.getProvider())
-            || (source.getSourceSystem() != null
-                && source.getSourceSystem().contains("SIMULATED")) ? "SYNTHETIC"
-            : "NORMALIZED_PROVIDER_EVIDENCE";
+        : isSynthetic(source) ? "SYNTHETIC" : "NORMALIZED_PROVIDER_EVIDENCE";
     BigDecimal contribution = dimension.score() == null ? null
         : BigDecimal.valueOf(dimension.score())
             .multiply(BigDecimal.valueOf(dimension.configuredWeight()))
@@ -128,18 +172,23 @@ public class DeterministicRiskAssessmentService {
         source == null ? null : source.getProvider(),
         source == null ? null : source.getSourceSystem(),
         source == null ? null : source.getCountryCode(),
-        source == null ? null : source.getId(), evidenceStatus, rule,
+        source == null ? null : source.getId(), evidenceStatus, null, null, rule,
         dimension.score(), dimension.configuredWeight(), contribution
     );
   }
 
-  private RiskAssessment.AssessmentEvidence assessmentEvidence(NormalizedEvidence credit) {
+  private RiskAssessment.AssessmentEvidence assessmentEvidence(
+      NormalizedEvidence credit, String originCountry, String destinationCountry
+  ) {
     if (credit == null) return null;
     return new RiskAssessment.AssessmentEvidence(
         credit.getProvider(), credit.getSourceSystem(), credit.getCountryCode(),
         credit.getCompletenessPercent(), credit.getRetrievedAt(),
-        "CONFIGURED_BUREAU_PRIORITY_WITH_COMPLETENESS",
-        "Credit factors use one sufficiently complete structured bureau record. Native bureau scores are preserved separately and are not averaged."
+        evidenceRole(credit.getCountryCode(), originCountry, destinationCountry),
+        isSynthetic(credit) ? "SYNTHETIC_TEST_EVIDENCE"
+            : selectionReason(credit.getCountryCode(), originCountry, destinationCountry),
+        "COUNTRY_AWARE_PER_FACTOR_SELECTION_V1",
+        "This is the primary eligible credit record. Individual factors may use an explicitly identified fallback record when a required metric is unavailable."
     );
   }
 
@@ -235,7 +284,9 @@ public class DeterministicRiskAssessmentService {
       EvidenceCoverage coverage,
       CreditBureauReconciliation reconciliation,
       List<RiskAssessment.Dimension> dimensions,
-      List<NormalizedEvidence> evidence
+      List<NormalizedEvidence> evidence,
+      String originCountry,
+      String destinationCountry
   ) {
     int availableWeight = dimensions.stream().filter(RiskAssessment.Dimension::available)
         .mapToInt(RiskAssessment.Dimension::configuredWeight).sum();
@@ -250,6 +301,19 @@ public class DeterministicRiskAssessmentService {
     List<String> actions = new ArrayList<>();
     if (!credit) actions.add("REQUEST_VERIFIED_CREDIT_EVIDENCE");
     if (!cashflow) actions.add("REQUEST_CONSENTED_CASHFLOW_EVIDENCE");
+    boolean destinationCashflow = evidence.stream().anyMatch(item -> "CASHFLOW".equals(item.getDomain())
+        && sameCountry(item.getCountryCode(), destinationCountry));
+    boolean sourceCashflow = evidence.stream().anyMatch(item -> "CASHFLOW".equals(item.getDomain())
+        && sameCountry(item.getCountryCode(), originCountry));
+    if (originCountry != null && destinationCountry != null
+        && !originCountry.equalsIgnoreCase(destinationCountry)) {
+      actions.add(sourceCashflow
+          ? "REVIEW_CONTINUING_SOURCE_COUNTRY_OBLIGATIONS_SEPARATELY"
+          : "VERIFY_CONTINUING_SOURCE_COUNTRY_OBLIGATIONS");
+    }
+    if (!destinationCashflow && sourceCashflow) {
+      actions.add("REQUEST_DESTINATION_COUNTRY_AFFORDABILITY_EVIDENCE");
+    }
     if (dimensions.stream().anyMatch(item -> !item.available()
         && ("DEBT_BURDEN".equals(item.key()) || "CASHFLOW_CAPACITY".equals(item.key())
             || "INCOME_STABILITY".equals(item.key())))) {
@@ -506,6 +570,8 @@ public class DeterministicRiskAssessmentService {
         "GCP_SIMULATOR".equals(evidence.getProvider())
             || (evidence.getSourceSystem() != null
                 && evidence.getSourceSystem().toUpperCase().contains("SIMULATED"))
+            || (evidence.getProviderReference() != null
+                && evidence.getProviderReference().toLowerCase().contains("-fixture"))
     );
   }
 
@@ -533,13 +599,94 @@ public class DeterministicRiskAssessmentService {
         .orElse(null);
   }
 
-  private NormalizedEvidence bestCredit(List<NormalizedEvidence> evidence) {
-    return evidence.stream().filter(item -> "CREDIT".equals(item.getDomain()))
-        .max(Comparator.comparingInt((NormalizedEvidence item) -> isSynthetic(item) ? 0 : 1)
-            .thenComparingInt(NormalizedEvidence::getCompletenessPercent)
-            .thenComparingInt(item -> bureauPriority(item.getSourceSystem()))
-            .thenComparing(item -> item.getRetrievedAt() == null ? Instant.EPOCH : item.getRetrievedAt()))
+  private NormalizedEvidence bestCredit(
+      List<NormalizedEvidence> evidence, String originCountry, String destinationCountry,
+      Predicate<NormalizedEvidence> eligible
+  ) {
+    return evidence.stream().filter(item -> "CREDIT".equals(item.getDomain())).filter(eligible)
+        .max(creditComparator(originCountry, destinationCountry))
         .orElse(null);
+  }
+
+  private Comparator<NormalizedEvidence> creditComparator(
+      String originCountry, String destinationCountry
+  ) {
+    return Comparator.comparingInt((NormalizedEvidence item) -> isSynthetic(item) ? 0 : 1)
+        .thenComparingInt(item -> countryPriority(
+            item.getCountryCode(), originCountry, destinationCountry
+        ))
+        .thenComparingInt(NormalizedEvidence::getCompletenessPercent)
+        .thenComparingInt(item -> bureauPriority(item.getSourceSystem()))
+        .thenComparing(item -> item.getRetrievedAt() == null
+            ? Instant.EPOCH : item.getRetrievedAt());
+  }
+
+  private NormalizedEvidence bestCashflow(
+      List<NormalizedEvidence> evidence, String originCountry, String destinationCountry,
+      Predicate<NormalizedEvidence> eligible
+  ) {
+    return evidence.stream().filter(item -> "CASHFLOW".equals(item.getDomain())).filter(eligible)
+        .max(countryAwareComparator(originCountry, destinationCountry)).orElse(null);
+  }
+
+  private NormalizedEvidence bestCashflowWithFallback(
+      List<NormalizedEvidence> evidence, String originCountry, String destinationCountry,
+      Predicate<NormalizedEvidence> eligible
+  ) {
+    NormalizedEvidence selected = bestCashflow(
+        evidence, originCountry, destinationCountry, eligible
+    );
+    return selected != null ? selected : bestCashflow(
+        evidence, originCountry, destinationCountry, item -> true
+    );
+  }
+
+  private Comparator<NormalizedEvidence> countryAwareComparator(
+      String originCountry, String destinationCountry
+  ) {
+    return Comparator.comparingInt((NormalizedEvidence item) -> isSynthetic(item) ? 0 : 1)
+        .thenComparingInt(item -> countryPriority(item.getCountryCode(), originCountry, destinationCountry))
+        .thenComparingInt(NormalizedEvidence::getCompletenessPercent)
+        .thenComparing(item -> item.getRetrievedAt() == null ? Instant.EPOCH : item.getRetrievedAt());
+  }
+
+  private int countryPriority(String country, String originCountry, String destinationCountry) {
+    if (sameCountry(country, destinationCountry)) return 2;
+    if (sameCountry(country, originCountry)) return 1;
+    return 0;
+  }
+
+  private String evidenceRole(String country, String originCountry, String destinationCountry) {
+    if (country == null) return "UNAVAILABLE";
+    if (sameCountry(country, destinationCountry)) return "DESTINATION_PRIMARY";
+    if (sameCountry(country, originCountry)) return "SOURCE_FALLBACK";
+    return "OTHER_COUNTRY";
+  }
+
+  private String selectionReason(String country, String originCountry, String destinationCountry) {
+    if (country == null) return "NO_ELIGIBLE_EVIDENCE";
+    if (sameCountry(country, destinationCountry)) return "VERIFIED_DESTINATION_COUNTRY_PRIORITY";
+    if (sameCountry(country, originCountry)) return "SOURCE_COUNTRY_FALLBACK";
+    return "BEST_ELIGIBLE_RECORD";
+  }
+
+  private boolean sameCountry(String left, String right) {
+    return left != null && right != null && left.equalsIgnoreCase(right);
+  }
+
+  private boolean has(NormalizedEvidence evidence, String section, String field) {
+    JsonNode value = evidence.getPayload().path(section).path(field);
+    return value.isNumber();
+  }
+
+  private boolean hasPositive(NormalizedEvidence evidence, String section, String field) {
+    BigDecimal value = decimal(evidence.getPayload().path(section), field);
+    return value != null && value.signum() > 0;
+  }
+
+  private boolean hasAny(NormalizedEvidence evidence, String section, String... fields) {
+    for (String field : fields) if (has(evidence, section, field)) return true;
+    return false;
   }
 
   private int bureauPriority(String sourceSystem) {
