@@ -98,3 +98,48 @@ If any remain, inspect the session tag and instance ID in the Mumbai console and
 Record test date, result, redacted error code/trace ID and next action. Never commit raw callback URLs, credentials, access tokens, PEMs, borrower identifiers or financial data. Production requires separate FIU eligibility, partner agreements, hosting, security and privacy review.
 
 References: https://docs.setu.co/data/account-aggregator/quickstart ; https://docs.setu.co/data/account-aggregator/api-integration/fip-apis ; https://docs.setu.co/data/account-aggregator/api-integration/consent-flow
+
+## Validation milestone — November 26, 2026
+
+### Configuration
+
+- Setu Bridge TEST credentials are stored in the existing
+  Git-ignored passport-service/application-local.properties.
+- Local credential file permissions restricted to 600.
+- Setu borrower sandbox feature remains disabled by default.
+- No separate Setu environment file is required.
+
+### Authenticated API diagnostics
+
+Run from the repository root with an active Mumbai browser tunnel:
+
+    bash scripts/setu-api-check.sh
+
+Verified results:
+
+- Mumbai network connectivity: HTTP 200.
+- Setu authentication: HTTP 200.
+- Access token generation: successful.
+- Authenticated FIP API: HTTP 200.
+- Financial institution records returned: 127.
+- Diagnostic script committed in a8bb561.
+
+### Application regression validation
+
+- SandboxFlowTest: 4 passed, 0 failures.
+- Full passport-service regression: 64 passed, 0 failures,
+  0 errors, 0 skipped.
+- Frontend TypeScript and Vite production build: successful.
+- Frontend modules transformed: 658.
+
+### Remaining validation
+
+- Provider-specific Java backend Mumbai egress.
+- Confirmed synthetic test VUA and transaction date range.
+- Live consent creation and borrower approval.
+- Genuine Setu notification authentication.
+- Live financial data retrieval and normalization.
+
+These results validate sandbox infrastructure, authenticated
+connectivity and existing automated tests. They do not establish
+production readiness or regulatory eligibility.
