@@ -1,0 +1,18 @@
+# India account launch (sandbox only)
+Disabled by default. No real customer identity, production switch, webhook trust, raw transaction storage, publication or scoring. This single-process pilot keeps consent/session IDs in memory for up to 256 drafts until service restart. Reloading a page resumes an attempt; restarting the backend does not. Never use this fixed test identity in a public deployment.
+
+## Local verification without AWS
+Run mvn test from passport-service and npm run build from synergy-frontend. SandboxFlowTest simulates provider responses; it does not require credentials or a tunnel. Run the mock preview separately if installed. Disable/remove the old preview before borrower-facing trials to avoid two cards.
+
+## When the mock identity is confirmed
+Use an authenticated private sandbox deployment with backend egress in Mumbai. The Chrome SSH proxy is not automatically used by Java. Keep local-auth development servers private. Do not open your development API to the internet.
+Set these in the **backend process environment** (not checked-in properties):
+- SETU_SANDBOX_ENABLED=true
+- SETU_CLIENT_ID, SETU_CLIENT_SECRET, SETU_PRODUCT_ID: Bridge TEST credentials.
+- SETU_TEST_VUA: confirmed mock identity only.
+- SETU_DATA_FROM, SETU_DATA_TO: ISO UTC instants covering the supplied mock deposit transactions.
+- SETU_RETURN_URL: exact browser-accessible GCP frontend URL ending in /passport-init (same browser origin as launch). Register it as the sandbox redirect in Bridge. The notification callback is a different URL.
+Only the frontend flag VITE_SETU_SANDBOX_ENABLED=true belongs in the frontend environment; restart Vite or rebuild.
+
+Open an editable India-origin passport draft at Financial information. Connect India account creates consent, remembers step 3 and opens the sandbox approval URL. Returning on the same browser restores the draft and asks the backend to check the saved consent. URL query parameters never authorize a fetch. Refresh status resumes polling if it times out. Only a completed matching session containing an account transaction array qualifies as connected (the array may be empty). No separate callback infrastructure is required for this polling path. A failed one-time fetch needs a new consent. The user can resume an existing pending consent. Finish sandbox testing and remove temporary AWS resources separately.
+

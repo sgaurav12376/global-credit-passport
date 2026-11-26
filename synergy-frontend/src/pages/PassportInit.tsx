@@ -5,6 +5,7 @@ import { cancelPassportUpdate, connectSources, generatePassport, getOrCreatePass
 import { getEntrustVerification, refreshEntrustVerification, startEntrustVerification as startEntrust } from "../api/entrust";
 import type { EntrustVerification } from "../api/entrust";
 import PlaidConnect from "../components/PlaidConnect";
+import IndiaAccountLaunch from "../components/IndiaAccountLaunch";
 import SurepassCreditConnect from "../components/SurepassCreditConnect";
 import CrsEquifaxConnect from "../components/CrsEquifaxConnect";
 
@@ -718,6 +719,8 @@ export default function PassportInit() {
               </div>
 
               <div className="data-source-grid">
+                {import.meta.env.VITE_SETU_SANDBOX_ENABLED === "true" && origin === "IN" && passportId && !readOnly &&
+                  <IndiaAccountLaunch key={passportId} id={passportId} saveReturn={() => persistInProgress({startStep: 3})} />}
                 <SurepassCreditConnect
                   readOnly={readOnly}
                   connected={creditBureau}
