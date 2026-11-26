@@ -6,12 +6,31 @@ Run mvn test from passport-service and npm run build from synergy-frontend. Sand
 
 ## When the mock identity is confirmed
 Use an authenticated private sandbox deployment with backend egress in Mumbai. The Chrome SSH proxy is not automatically used by Java. Keep local-auth development servers private. Do not open your development API to the internet.
-Set these in the **backend process environment** (not checked-in properties):
-- SETU_SANDBOX_ENABLED=true
-- SETU_CLIENT_ID, SETU_CLIENT_SECRET, SETU_PRODUCT_ID: Bridge TEST credentials.
-- SETU_TEST_VUA: confirmed mock identity only.
-- SETU_DATA_FROM, SETU_DATA_TO: ISO UTC instants covering the supplied mock deposit transactions.
-- SETU_RETURN_URL: exact browser-accessible GCP frontend URL ending in /passport-init (same browser origin as launch). Register it as the sandbox redirect in Bridge. The notification callback is a different URL.
+Configure Setu in the existing Git-ignored
+`passport-service/application-local.properties` file
+for local development:
+
+- `setu.sandbox.enabled=false`: enable only for an authorized private sandbox trial.
+- `setu.client-id`: Bridge TEST client ID.
+- `setu.client-secret`: Bridge TEST client secret.
+- `setu.product-id`: Bridge TEST product instance ID.
+- `setu.test-vua`: confirmed mock identity only.
+- `setu.data-from`, `setu.data-to`: ISO UTC instants covering the supplied mock deposit transactions.
+- `setu.return-url`: exact browser-accessible GCP frontend URL ending in /passport-init (same browser origin as launch). Register it as the sandbox redirect in Bridge. The notification callback is a different URL.
+
+The tracked `application-local.example.properties`
+contains empty placeholders. Never commit actual credentials.
+
+Spring Boot environment variables remain an alternative
+for hosted deployments.
+
+For independent authentication and FIP connectivity
+validation, run `scripts/setu-api-check.sh` with an
+active authorized Mumbai SOCKS5 session.
+
+This diagnostic does not require enabling the borrower
+workflow.
+
 Only the frontend flag VITE_SETU_SANDBOX_ENABLED=true belongs in the frontend environment; restart Vite or rebuild.
 
 Open an editable India-origin passport draft at Financial information. Connect India account creates consent, remembers step 3 and opens the sandbox approval URL. Returning on the same browser restores the draft and asks the backend to check the saved consent. URL query parameters never authorize a fetch. Refresh status resumes polling if it times out. Only a completed matching session containing an account transaction array qualifies as connected (the array may be empty). No separate callback infrastructure is required for this polling path. A failed one-time fetch needs a new consent. The user can resume an existing pending consent. Finish sandbox testing and remove temporary AWS resources separately.
