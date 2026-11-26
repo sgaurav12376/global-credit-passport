@@ -13,7 +13,7 @@ case "$mode" in
   backend) args+=(-L 127.0.0.1:18087:127.0.0.1:8087) ;;
   *) echo "Expected browser or backend" >&2; exit 2 ;;
 esac
-echo "Opening tunnel. Leave this terminal open; Ctrl+C closes only SSH, not EC2."
-exec ssh -N -T -i "$key" -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+echo "Opening tunnel. Leave this terminal open. Ctrl+C ends the tunnel and automatically terminates EC2 when launched through setu-demo-session.sh."
+exec ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -N -T -i "$key" -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
   -o ConnectTimeout=12 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
   "${args[@]}" "ec2-user@$host"
