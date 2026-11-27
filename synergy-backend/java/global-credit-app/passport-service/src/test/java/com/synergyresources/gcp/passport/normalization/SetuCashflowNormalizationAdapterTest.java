@@ -149,7 +149,7 @@ class SetuCashflowNormalizationAdapterTest {
         assertEquals("setu-cashflow",
             result.provenance().adapterId());
 
-        assertEquals("0.1.0",
+        assertEquals("0.2.0",
             result.provenance().adapterVersion());
 
         assertNull(result.provenance().consentedAt());
@@ -261,4 +261,37 @@ class SetuCashflowNormalizationAdapterTest {
             payload.path("provenance")
                 .path("countryCode").asText());
     }
+
+    @Test
+    void exposesStructuredCurrencyAndEnvironment() {
+
+        var result =
+            adapter.normalize(summary(), syntheticContext());
+
+        assertEquals("INR", result.currencyCode());
+
+        assertEquals(
+            GcpNormalized.EvidenceEnvironment.SYNTHETIC,
+            result.evidenceEnvironment()
+        );
+    }
+
+    @Test
+    void serializesStructuredMetadata() {
+
+        var payload = json.valueToTree(
+            adapter.normalize(summary(), syntheticContext())
+        );
+
+        assertEquals(
+            "INR",
+            payload.path("currencyCode").asText()
+        );
+
+        assertEquals(
+            "SYNTHETIC",
+            payload.path("evidenceEnvironment").asText()
+        );
+    }
+
 }

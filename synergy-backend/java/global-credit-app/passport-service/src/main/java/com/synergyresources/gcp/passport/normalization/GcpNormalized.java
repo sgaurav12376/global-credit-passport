@@ -49,13 +49,47 @@ public final class GcpNormalized {
       BigDecimal incomeStabilityPercent
   ) {}
 
+  public enum EvidenceEnvironment {
+    SYNTHETIC,
+    SANDBOX,
+    PRODUCTION,
+    UNKNOWN
+  }
+
   public record CashflowDataset(
       String schemaVersion,
       Provenance provenance,
       CashflowMetrics metrics,
       JsonNode monthlyCashflow,
-      DataQuality dataQuality
-  ) {}
+      DataQuality dataQuality,
+      String currencyCode,
+      EvidenceEnvironment evidenceEnvironment
+  ) {
+    public CashflowDataset {
+      if (currencyCode != null) {
+        currencyCode = java.util.Currency
+            .getInstance(currencyCode)
+            .getCurrencyCode();
+      }
+
+      if (evidenceEnvironment == null) {
+        evidenceEnvironment = EvidenceEnvironment.UNKNOWN;
+      }
+    }
+
+    // Backward-compatible constructor for existing adapters.
+    public CashflowDataset(
+        String schemaVersion,
+        Provenance provenance,
+        CashflowMetrics metrics,
+        JsonNode monthlyCashflow,
+        DataQuality dataQuality
+    ) {
+      this(schemaVersion, provenance, metrics,
+          monthlyCashflow, dataQuality,
+          null, EvidenceEnvironment.UNKNOWN);
+    }
+  }
 
   public record IdentityDataset(
       String schemaVersion,

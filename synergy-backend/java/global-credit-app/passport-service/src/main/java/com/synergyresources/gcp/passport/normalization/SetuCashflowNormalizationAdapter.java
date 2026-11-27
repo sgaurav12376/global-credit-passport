@@ -26,7 +26,7 @@ public final class SetuCashflowNormalizationAdapter
 
     @Override
     public String adapterVersion() {
-        return "0.1.0";
+        return "0.2.0";
     }
 
     @Override
@@ -136,7 +136,10 @@ public final class SetuCashflowNormalizationAdapter
                 completeness,
                 List.copyOf(fields),
                 List.copyOf(warnings)
-            )
+            ),
+
+            source.currency(),
+            GcpNormalized.EvidenceEnvironment.SYNTHETIC
         );
     }
 
