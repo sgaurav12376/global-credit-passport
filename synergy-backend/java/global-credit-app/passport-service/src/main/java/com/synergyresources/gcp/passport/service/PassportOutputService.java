@@ -195,6 +195,8 @@ public class PassportOutputService {
       node.set("dataset", item.getPayload());
     });
 
+    document.set("financialEvidenceSummary", FinancialEvidenceSummary.from(objectMapper, document));
+
     PassportOutput output = new PassportOutput();
     output.setBorrowerId(borrowerId);
     output.setPassportId(passport.getId());

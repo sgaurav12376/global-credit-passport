@@ -106,6 +106,7 @@ export type PassportOutput = {
       missingDomains: string[];
       sufficientForRiskAssessment: boolean;
     };
+    financialEvidenceSummary?: FinancialEvidenceSummary[];
     normalizedEvidence?: Array<{
       evidenceId?: string;
       domain: string;
@@ -309,6 +310,29 @@ export type ReviewDocumentRequest = {
   uploadedAt: string | null;
 };
 
+export type FinancialEvidenceSummary = {
+  countryCode: string;
+  provider: string;
+  sourceSystem: string;
+  currencyCode: string | null;
+  evidenceEnvironment: "SYNTHETIC" | "SANDBOX" | "PRODUCTION" | "UNKNOWN";
+  metrics: {
+    institutionConnections?: number;
+    depositoryAccounts?: number;
+    analyzedTransactions?: number;
+    completeMonthsAnalyzed?: number;
+    coverageStart?: string;
+    coverageEnd?: string;
+    averageMonthlyIncome?: number;
+    averageMonthlyOutflows?: number;
+    averageMonthlyDebtPayments?: number;
+    averageMonthlyNetCashflow?: number;
+    incomeStabilityPercent?: number;
+    debtToIncomePercent?: number;
+    netCashflowToIncomePercent?: number;
+  };
+};
+
 export type SharedPassport = {
   recipientName: string;
   purpose: string;
@@ -346,6 +370,7 @@ export type SharedPassport = {
       nativeMinimum?: number;
       nativeMaximum?: number;
     }>;
+    financialEvidenceSummary?: FinancialEvidenceSummary[];
     riskAssessment: NonNullable<PassportOutput["document"]["riskAssessment"]>;
   };
 };

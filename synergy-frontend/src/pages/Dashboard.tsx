@@ -5,6 +5,7 @@ import type { PassportOutput, PassportShareSummary, PassportView, ReviewStatus }
 import { getAccessToken, logout } from "../auth/auth";
 import PassportSharing from "../components/PassportSharing";
 import OpenBankingEvidence from "../components/OpenBankingEvidence";
+import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
 
 const PASSPORT_LS_KEY = "gcp.passportInit";
@@ -282,6 +283,7 @@ export default function Dashboard() {
         </div></section>}
         </>}
         {dashboardView === "financial" && financialEvidence && <div className="financial-records-view">
+          <CrossBorderFinancialProfile evidence={output.document.financialEvidenceSummary} origin={financialEvidence.origin} destination={financialEvidence.destination}/>
           <div className="record-summary-grid">
             <article><span className="country-chip">{financialEvidence.origin}</span><div><small>SOURCE-COUNTRY CREDIT</small><b>{output.document.creditReconciliation?.bureauCount || 0} bureau record{output.document.creditReconciliation?.bureauCount === 1 ? "" : "s"}</b><p>{output.document.creditReconciliation?.nativeScores.map((score) => `${friendlyBureauLabel(score.bureau)} ${score.value ?? "—"}`).join(" · ") || "No credit record included"}</p></div></article>
             <article><span className="country-chip">{financialEvidence.destination}</span><div><small>DESTINATION-COUNTRY CREDIT</small><b>{destinationCreditEvidence.length ? `${destinationCreditEvidence.length} bureau record${destinationCreditEvidence.length === 1 ? "" : "s"}` : "No local credit record"}</b><p>{destinationCreditEvidence.length ? destinationCreditEvidence.map((item) => `${friendlyBureauLabel(item.sourceSystem)} ${evidenceNativeScore(item)?.value ?? "—"}`).join(" · ") : "No destination-country credit file included"}</p></div></article>

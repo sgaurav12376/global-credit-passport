@@ -324,6 +324,7 @@ public class PassportShareService {
     report.set("creditEvidenceSummary", creditEvidenceSummary(
         source.path("normalizedEvidence")
     ));
+    report.set("financialEvidenceSummary", FinancialEvidenceSummary.from(objectMapper, source));
     return report;
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
 import { createLenderDocumentRequest, getLenderDocumentRequests, getSharedPassport, getSharedPassportReview, lenderDocumentDownloadUrl, subscribeLenderReviewEvents, updateLenderDocumentStatus, updateSharedPassportReview } from "../api/passport";
 import type { ReviewDocumentRequest, ReviewOutcome, ReviewStatus, SharedPassport } from "../api/passport";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
@@ -180,6 +181,7 @@ export default function LenderPassport() {
       </div>
       <p className="lender-decision-note">This profile index summarizes observed evidence. It is not a credit score, approval recommendation or substitute for the lender’s underwriting policy.</p>
     </section>
+    <CrossBorderFinancialProfile evidence={report.financialEvidenceSummary} origin={report.corridor.originCountry} destination={report.corridor.destinationCountry}/>
     <section className="simple-card lender-risk-card lender-collapsible-section">
       <details className="lender-section-details">
       <summary><span><b>Detailed assessment and bureau evidence</b><small>Review all factors, native bureau scores, cross-border interpretation and calculation methodology.</small></span><em>View details</em></summary>
