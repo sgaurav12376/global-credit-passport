@@ -35,3 +35,26 @@ Only the frontend flag VITE_SETU_SANDBOX_ENABLED=true belongs in the frontend en
 
 Open an editable India-origin passport draft at Financial information. Connect India account creates consent, remembers step 3 and opens the sandbox approval URL. Returning on the same browser restores the draft and asks the backend to check the saved consent. URL query parameters never authorize a fetch. Refresh status resumes polling if it times out. Only a completed matching session containing an account transaction array qualifies as connected (the array may be empty). No separate callback infrastructure is required for this polling path. A failed one-time fetch needs a new consent. The user can resume an existing pending consent. Finish sandbox testing and remove temporary AWS resources separately.
 
+
+## Provider-specific Java network routing
+
+Setu uses a dedicated OkHttp transport.
+
+For authorized local sandbox development:
+
+    setu.network.mode=SOCKS5
+    setu.proxy.host=127.0.0.1
+    setu.proxy.port=1080
+
+For an authorized AWS Mumbai deployment:
+
+    setu.network.mode=DIRECT
+
+The network mode must be explicitly configured.
+SOCKS5 mode does not intentionally fall back to direct connectivity.
+
+No Privoxy or global JVM proxy configuration is required.
+Other GCP provider clients retain their existing network routing.
+
+See docs/integrations/setu-sandbox-runbook.md for live Java
+connectivity diagnostics and validation results.

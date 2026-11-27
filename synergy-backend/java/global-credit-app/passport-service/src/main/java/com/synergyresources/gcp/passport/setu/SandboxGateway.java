@@ -2,9 +2,11 @@ package com.synergyresources.gcp.passport.setu;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
-import java.net.http.*;
-import java.time.Duration;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,10 +17,14 @@ import org.springframework.stereotype.Component;
 class SandboxGateway {
   private final ObjectMapper json;
   private final String clientId, secret, product, vua, redirect;
-  private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
+  private final OkHttpClient http;
   SandboxGateway(ObjectMapper json, @Value("${setu.client-id}") String clientId,
       @Value("${setu.client-secret}") String secret, @Value("${setu.product-id}") String product,
-      @Value("${setu.test-vua}") String vua, @Value("${setu.return-url}") String redirect) {
+      @Value("${setu.test-vua}") String vua, @Value("${setu.return-url}") String redirect,
+      @Value("${setu.network.mode}") String networkMode,
+      @Value("${setu.proxy.host:127.0.0.1}") String proxyHost,
+      @Value("${setu.proxy.port:1080}") int proxyPort) {
+    this.http = SetuHttpClient.create(networkMode, proxyHost, proxyPort);
     this.json=json; this.clientId=clientId; this.secret=secret; this.product=product;
     this.vua=vua; this.redirect=redirect;
   }
@@ -34,17 +40,28 @@ class SandboxGateway {
       "consentTypes",List.of("TRANSACTIONS"),"fiTypes",List.of("DEPOSIT"),"fetchType","ONETIME",
       "consentMode","VIEW","enableAdditionalPhoneNumber",false));
   }
-  private JsonNode send(String url,Map<String,String> headers,Object payload) {
+  private JsonNode send(String url, Map<String,String> headers, Object payload) {
     try {
-      var b=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15));
-      headers.forEach(b::header);
-      if(payload!=null) b.header("Content-Type","application/json")
-        .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload)));
-      var r=http.send(b.build(),HttpResponse.BodyHandlers.ofString());
-      if(r.statusCode()/100 != 2) throw new IllegalStateException();
-      return json.readTree(r.body());
-    } catch(InterruptedException e) {
-      Thread.currentThread().interrupt(); throw new IllegalStateException("Sandbox request interrupted");
-    } catch(Exception e) { throw new IllegalStateException("Sandbox request failed"); }
+      var builder = new Request.Builder().url(url);
+      headers.forEach(builder::header);
+
+      if (payload != null) {
+        builder.post(RequestBody.create(
+            json.writeValueAsString(payload),
+            MediaType.get("application/json")
+        ));
+      } else {
+        builder.get();
+      }
+
+      try (Response response = http.newCall(builder.build()).execute()) {
+        if (!response.isSuccessful() || response.body() == null) {
+          throw new IllegalStateException();
+        }
+        return json.readTree(response.body().string());
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Sandbox request failed");
+    }
   }
 }

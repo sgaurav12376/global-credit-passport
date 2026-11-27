@@ -17,6 +17,15 @@
   <description>Baseline Spring Boot service template</description>
 
   <dependencies>
+
+    <!-- Setu provider-specific HTTP transport -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>okhttp-jvm</artifactId>
+      <version>5.5.1</version>
+    </dependency>
+
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>

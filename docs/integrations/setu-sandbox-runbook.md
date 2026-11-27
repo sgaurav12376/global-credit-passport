@@ -143,3 +143,66 @@ Verified results:
 These results validate sandbox infrastructure, authenticated
 connectivity and existing automated tests. They do not establish
 production readiness or regulatory eligibility.
+
+## Java transport validation — November 27, 2026
+
+### Implementation
+
+- OkHttp JVM 5.5.1 introduced exclusively for Setu.
+- Dedicated SetuHttpClient supports SOCKS5 and DIRECT modes.
+- SandboxGateway migrated to the dedicated transport.
+- No global JVM proxy configuration.
+- No Privoxy or additional local proxy process required.
+- Automatic connection retries and redirects disabled.
+- Existing provider implementations remain unchanged.
+
+### Local development configuration
+
+In the Git-ignored passport-service/application-local.properties:
+
+    setu.network.mode=SOCKS5
+    setu.proxy.host=127.0.0.1
+    setu.proxy.port=1080
+
+Reuse the existing temporary Mumbai SSH session.
+
+### Future AWS Mumbai deployment
+
+    setu.network.mode=DIRECT
+
+Direct cloud connectivity requires separate deployment validation
+and applicable Setu onboarding and regulatory approvals.
+
+### Verified results
+
+- Existing backend regression: 64 tests passed.
+- Seven new transport tests passed.
+- Combined regression: 71 tests passed.
+- Live Java public IP matched Mumbai EC2.
+- Java Setu authentication successful.
+- Authenticated FIP retrieval successful.
+- 127 financial institution records returned.
+- Live connectivity test passed.
+- Tunnel unavailable test returned Connection refused.
+- Authentication did not proceed after failed egress verification.
+
+### Reusable Java diagnostic
+
+Run from passport-service with an active authorized Mumbai tunnel:
+
+    mvn -Dtest=SetuLiveConnectivityTest \
+      -Dsetu.live.check=true \
+      -Dsetu.expected.egress.ip="$MUMBAI_IP" test
+
+Set MUMBAI_IP to the current EC2 public IP before running.
+
+The live diagnostic is disabled during ordinary regression tests.
+
+### Remaining validation
+
+- Independent verification of remote DNS resolution.
+- Direct connectivity from the deployed Mumbai backend.
+- Confirmed synthetic borrower VUA and transaction date range.
+- Live consent lifecycle and financial data retrieval.
+- Financial data normalization and evidence integration.
+- Production FIU eligibility and regional data governance.
