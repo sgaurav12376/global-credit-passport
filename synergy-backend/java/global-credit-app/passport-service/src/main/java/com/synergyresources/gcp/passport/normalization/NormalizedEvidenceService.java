@@ -37,6 +37,15 @@ public class NormalizedEvidenceService {
   public NormalizedEvidence saveCashflow(
       UUID borrowerId, UUID passportId, GcpNormalized.CashflowDataset dataset
   ) {
+    // Setu remains an isolated development adapter until approved for publication.
+    // Never persist explicitly synthetic cashflow as borrower evidence.
+    var provenance = dataset.provenance();
+    if (dataset.evidenceEnvironment() == GcpNormalized.EvidenceEnvironment.SYNTHETIC
+        || "SETU".equalsIgnoreCase(provenance.provider())
+        || "SETU_CASHFLOW_FIXTURE".equalsIgnoreCase(provenance.sourceSystem())
+        || "setu-cashflow".equalsIgnoreCase(provenance.adapterId())) {
+      throw new IllegalArgumentException("Cashflow evidence is not eligible for persistence");
+    }
     return save(borrowerId, passportId, "CASHFLOW", dataset.schemaVersion(),
         dataset.provenance(), dataset.dataQuality(), dataset);
   }
