@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PlaidFinancialSnapshotService {
-  public static final String METHODOLOGY_VERSION = "PLAID_CASHFLOW_V3";
+  public static final String METHODOLOGY_VERSION = "PLAID_CASHFLOW_V4";
 
   private final PlaidFinancialSummaryService summaryService;
   private final PlaidFinancialSnapshotRepo snapshotRepo;

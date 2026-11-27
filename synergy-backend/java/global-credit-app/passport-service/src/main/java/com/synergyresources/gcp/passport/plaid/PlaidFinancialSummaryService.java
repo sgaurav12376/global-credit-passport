@@ -9,6 +9,8 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 
 @Service
 public class PlaidFinancialSummaryService {
@@ -18,18 +20,22 @@ public class PlaidFinancialSummaryService {
     this.jdbcTemplate = jdbcTemplate;
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
   public FinancialSummary getSummary(UUID borrowerId) {
     return getSummary(borrowerId, null);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
   public FinancialSummary getSummary(UUID borrowerId, List<String> itemIds) {
     if (itemIds != null && itemIds.isEmpty()) {
       throw new IllegalArgumentException("At least one Plaid item is required");
     }
     Coverage coverage = loadCoverage(borrowerId, itemIds);
-    List<MonthlyCashflow> monthly = loadMonthly(borrowerId, coverage, itemIds);
+    // Read the exact same eligible transaction population as the monthly views.
+    String currency = coverage.currencyCode();
+    List<MonthlyCashflow> monthly = currency == null ? List.of()
+        : loadMonthly(borrowerId, coverage, itemIds);
+
     List<MonthlyCashflow> completeMonths = monthly.stream()
         .filter(MonthlyCashflow::completeMonth)
         .toList();
@@ -41,6 +47,10 @@ public class PlaidFinancialSummaryService {
     BigDecimal averageDebt = average(completeMonths, MonthlyCashflow::debtPayments);
     BigDecimal sustainableNet = averageIncome.add(averageInterest).subtract(averageOutflows);
     BigDecimal observedNet = sustainableNet.add(averageRefunds);
+    if (currency == null || completeMonths.size() < 2) {
+      averageIncome = averageInterest = averageRefunds = averageOutflows = averageDebt = null;
+      sustainableNet = observedNet = null;
+    }
 
     return new FinancialSummary(
         borrowerId,
@@ -60,7 +70,8 @@ public class PlaidFinancialSummaryService {
         sustainableNet,
         observedNet,
         incomeStability(completeMonths),
-        monthly
+        monthly,
+        currency
     );
   }
 
@@ -73,7 +84,11 @@ public class PlaidFinancialSummaryService {
           COUNT(DISTINCT (pt.item_id, pt.account_id)) AS accounts,
           COUNT(*) AS transactions,
           MIN(pt.transaction_date) AS coverage_start,
-          MAX(pt.transaction_date) AS coverage_end
+          MAX(pt.transaction_date) AS coverage_end,
+          COUNT(DISTINCT pt.currency_code) AS currency_count,
+          MIN(pt.currency_code) AS currency_code,
+          COUNT(*) FILTER (WHERE pt.currency_code IS NULL OR pt.amount IS NULL
+            OR pa.currency_code IS NULL OR pa.currency_code <> pt.currency_code) AS invalid_currency_rows
         FROM plaid_transactions pt
         JOIN plaid_accounts pa
           ON pa.item_id = pt.item_id
@@ -88,7 +103,10 @@ public class PlaidFinancialSummaryService {
             resultSet.getInt("accounts"),
             resultSet.getInt("transactions"),
             localDate(resultSet.getDate("coverage_start")),
-            localDate(resultSet.getDate("coverage_end"))
+            localDate(resultSet.getDate("coverage_end")),
+            PlaidCurrencyValidation.confirmedCurrency(resultSet.getInt("transactions"),
+                resultSet.getInt("currency_count"), resultSet.getInt("invalid_currency_rows"),
+                resultSet.getString("currency_code"))
         ), parameters.toArray()
     );
   }
@@ -200,7 +218,8 @@ public class PlaidFinancialSummaryService {
       int accounts,
       int transactions,
       LocalDate coverageStart,
-      LocalDate coverageEnd
+      LocalDate coverageEnd,
+      String currencyCode
   ) {
   }
 
@@ -236,7 +255,24 @@ public class PlaidFinancialSummaryService {
       BigDecimal averageMonthlySustainableNetCashflow,
       BigDecimal averageMonthlyObservedNetCashflow,
       BigDecimal incomeStabilityPercent,
-      List<MonthlyCashflow> monthlyCashflow
+      List<MonthlyCashflow> monthlyCashflow,
+      String currencyCode
   ) {
+    // Existing callers and historical fixtures remain source compatible.
+    public FinancialSummary(UUID borrowerId, int institutionConnections, int depositoryAccounts,
+        int analyzedTransactions, LocalDate coverageStart, LocalDate coverageEnd,
+        int calendarMonthsObserved, int completeMonthsAnalyzed, int partialMonthsExcluded,
+        BigDecimal averageMonthlyDetectedIncome, BigDecimal averageMonthlyInterestIncome,
+        BigDecimal averageMonthlyRefundsOtherCredits, BigDecimal averageMonthlyOutflows,
+        BigDecimal averageMonthlyDebtPayments, BigDecimal averageMonthlySustainableNetCashflow,
+        BigDecimal averageMonthlyObservedNetCashflow, BigDecimal incomeStabilityPercent,
+        List<MonthlyCashflow> monthlyCashflow) {
+      this(borrowerId, institutionConnections, depositoryAccounts, analyzedTransactions,
+          coverageStart, coverageEnd, calendarMonthsObserved, completeMonthsAnalyzed,
+          partialMonthsExcluded, averageMonthlyDetectedIncome, averageMonthlyInterestIncome,
+          averageMonthlyRefundsOtherCredits, averageMonthlyOutflows, averageMonthlyDebtPayments,
+          averageMonthlySustainableNetCashflow, averageMonthlyObservedNetCashflow,
+          incomeStabilityPercent, monthlyCashflow, null);
+    }
   }
 }

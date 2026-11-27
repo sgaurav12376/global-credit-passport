@@ -11,9 +11,19 @@ import org.springframework.stereotype.Component;
 public class PlaidCashflowNormalizationAdapter
     implements NormalizationAdapter<JsonNode, GcpNormalized.CashflowDataset> {
   public String adapterId() { return "plaid-cashflow"; }
-  public String adapterVersion() { return "1.4.0"; }
+  public String adapterVersion() { return "1.5.0"; }
 
   public GcpNormalized.CashflowDataset normalize(JsonNode source, NormalizationContext context) {
+    String currency = com.synergyresources.gcp.passport.plaid.PlaidCurrencyValidation
+        .confirmedCurrency(1, 1, 0, source.path("currencyCode").asText(null));
+    // New currency-aware snapshots with unavailable currency or incomplete history cannot supply monetary metrics.
+    if (source.isObject() && source.has("currencyCode") && (currency == null || source.path("completeMonthsAnalyzed").asInt(0) < 2)) {
+      var safe = ((com.fasterxml.jackson.databind.node.ObjectNode) source.deepCopy());
+      for (String field : List.of("averageMonthlyDetectedIncome", "averageMonthlyOutflows",
+          "averageMonthlyDebtPayments", "averageMonthlySustainableNetCashflow", "incomeStabilityPercent")) safe.remove(field);
+      safe.putArray("monthlyCashflow");
+      source = safe;
+    }
     List<String> fields = new ArrayList<>();
     add(fields, source, "analyzedTransactions");
     add(fields, source, "coverageStart");
@@ -23,6 +33,7 @@ public class PlaidCashflowNormalizationAdapter
     add(fields, source, "incomeStabilityPercent");
     int completeness = Math.min(100, Math.round(fields.size() * 100f / 6f));
     List<String> warnings = new ArrayList<>();
+    if (currency == null) warnings.add("Currency not confirmed; financial metrics withheld");
     Integer completeMonths = integer(source, "completeMonthsAnalyzed");
     if (completeMonths == null || completeMonths < 2) {
       warnings.add("Fewer than two complete months of cash-flow history are available");
@@ -46,7 +57,8 @@ public class PlaidCashflowNormalizationAdapter
             decimal(source, "incomeStabilityPercent")
         ),
         source.path("monthlyCashflow"),
-        new GcpNormalized.DataQuality(completeness, List.copyOf(fields), List.copyOf(warnings))
+        new GcpNormalized.DataQuality(completeness, List.copyOf(fields), List.copyOf(warnings)),
+        currency, GcpNormalized.EvidenceEnvironment.UNKNOWN
     );
   }
 

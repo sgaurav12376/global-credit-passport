@@ -47,7 +47,7 @@ class IndependentNormalizationTest {
     assertEquals("GCP_CREDIT_V1", credit.schemaVersion());
     assertEquals(785, credit.nativeScore().value());
     assertEquals("GCP_CASHFLOW_V1", cashflow.schemaVersion());
-    assertEquals("1.4.0", cashflow.provenance().adapterVersion());
+    assertEquals("1.5.0", cashflow.provenance().adapterVersion());
     assertEquals(new BigDecimal("1800"), cashflow.metrics().averageMonthlyNetCashflow());
     assertTrue(cashflow.dataQuality().completenessPercent() >= 80);
   }

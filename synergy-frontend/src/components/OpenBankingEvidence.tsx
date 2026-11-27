@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { getPlaidConnections, getPlaidFinancialSummary } from "../api/plaid";
 import type { PlaidConnectionResult, PlaidFinancialSummary } from "../api/plaid";
 
-function money(value: number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value || 0);
+function money(value: number | null | undefined, currency?: string | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) || !currency) return "Unavailable";
+  try { return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value); }
+  catch { return "Unavailable"; }
 }
 
 function shortDate(value?: string | null) {
@@ -89,10 +87,10 @@ export default function OpenBankingEvidence({ passportId, defaultOpen = false }:
       {summary && <>
         <div className="bank-metric-grid">
           <div><span>Complete months analyzed</span><b>{summary.completeMonthsAnalyzed}</b></div>
-          <div><span>Average identified income</span><b>{money(summary.averageMonthlyDetectedIncome)}/month</b></div>
-          <div><span>Average monthly outflows</span><b>{money(summary.averageMonthlyOutflows)}/month</b></div>
-          <div><span>Average debt payments</span><b>{money(summary.averageMonthlyDebtPayments)}/month</b></div>
-          <div><span>Sustainable net cash flow</span><b>{money(summary.averageMonthlySustainableNetCashflow)}/month</b></div>
+          <div><span>Average identified income</span><b>{money(summary.averageMonthlyDetectedIncome, summary.currencyCode)}/month</b></div>
+          <div><span>Average monthly outflows</span><b>{money(summary.averageMonthlyOutflows, summary.currencyCode)}/month</b></div>
+          <div><span>Average debt payments</span><b>{money(summary.averageMonthlyDebtPayments, summary.currencyCode)}/month</b></div>
+          <div><span>Sustainable net cash flow</span><b>{money(summary.averageMonthlySustainableNetCashflow, summary.currencyCode)}/month</b></div>
           <div><span>Income stability</span><b>{summary.incomeStabilityPercent == null ? "Unavailable" : `${summary.incomeStabilityPercent}%`}</b></div>
         </div>
       </>}
@@ -109,17 +107,17 @@ export default function OpenBankingEvidence({ passportId, defaultOpen = false }:
         <div className="institution-list">{institutions.map((institution) => <details key={institution.name}>
           <summary><span><b>{institution.name}</b><small>{institution.accounts.length} connected accounts</small></span><em>View accounts</em></summary>
           <div className="connected-account-list">{institution.accounts.map((account) => {
-            const currency = account.balances?.iso_currency_code || "USD";
+            const currency = account.balances?.iso_currency_code;
             const liability = account.type === "loan" || account.type === "credit";
             return <article key={`${institution.name}-${account.account_id}`}>
               <div><b>{accountName(account.name)}</b><small>{accountType(account.type, account.subtype)}</small></div>
               <div><span>{account.mask ? `Account ending ${account.mask}` : "Masked account"}</span></div>
-              <div><span>{liability ? "Reported amount owed" : "Reported balance"}</span><b>{money(account.balances?.current || 0, currency)}</b></div>
+              <div><span>{liability ? "Reported amount owed" : "Reported balance"}</span><b>{money(account.balances?.current, currency)}</b></div>
             </article>;
           })}</div>
         </details>)}</div></section>
       </div></details>}
-      {summary && <p className="borrower-audit-note">Sandbox institutions and accounts contain sample data. Amounts are analyzed within the account currency. Raw transactions and full account numbers are not included in the shared lender report.</p>}
+      {summary && <p className="borrower-audit-note">Amounts require a confirmed currency. Raw transactions and full account numbers are not shared with lenders.</p>}
     </div>
   </details>;
 }

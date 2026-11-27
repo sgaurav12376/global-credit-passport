@@ -84,6 +84,7 @@ export type PlaidMonthlyCashflow = {
 };
 
 export type PlaidFinancialSummary = {
+  currencyCode?: string | null;
   borrowerId: string;
   institutionConnections: number;
   depositoryAccounts: number;
