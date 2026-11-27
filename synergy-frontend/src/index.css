@@ -805,3 +805,42 @@ html,body,#root{ height:100%; margin:0; }
   .risk-factor-table>div{ break-inside:avoid; }
   a{ color:inherit; text-decoration:none; }
 }
+
+/* GCP 1B: compact screen presentation; existing print stylesheet remains authoritative. */
+.gcp-compact .gcp-mode { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 12px; }
+.gcp-mode details { font-size:12px; }
+.gcp-mode summary { cursor:pointer; font-weight:650; }
+.gcp-mode p { margin:6px 0 0; font-size:12px; }
+.gcp-compact .gcp-country-credit { margin:8px 0 12px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.gcp-mini-scores { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.gcp-mini-scores>div { display:grid; gap:3px; min-width:0; }
+.gcp-mini-scores span,.gcp-mini-scores small { font-size:11px; overflow-wrap:anywhere; color:var(--muted); }
+.gcp-mini-scores b { font-size:21px; color:var(--primary); }
+.gcp-snapshot-note { display:grid; gap:5px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; font-size:12px; }
+.gcp-snapshot-note span { color:var(--muted); }
+.gcp-snapshot-note button { justify-self:start; }
+@media screen {
+.gcp-compact .tab-heading { padding-bottom:10px; margin-bottom:10px; }
+.gcp-compact .tab-heading h2 { font-size:clamp(21px,3vw,27px); margin:3px 0; }
+.gcp-compact .tab-heading p { font-size:13px; margin:0; }
+.gcp-compact .tab-heading .eyebrow { display:none; }
+.gcp-compact .borrower-command-status { padding:12px 14px; }
+.gcp-compact .command-profile-grid { gap:8px; margin-top:8px; }
+.gcp-compact .command-profile-grid>article { min-height:0; padding:11px; gap:4px; }
+.gcp-compact .command-evidence { padding:12px; }
+.gcp-compact .command-evidence>div { gap:7px; }
+.gcp-compact .command-evidence article { padding:8px; }
+.gcp-compact .gcp-financial-profile { padding:12px; margin:8px 0; }
+.gcp-compact .gcp-financial-profile-grid { gap:10px; margin:8px 0; align-items:start; }
+.gcp-compact .gcp-financial-country { padding:12px; }
+.gcp-compact .records-detail-section>summary,.gcp-compact .lender-section-details>summary,.gcp-compact .lender-action-details>summary { padding:10px 13px; }
+.gcp-compact details:not([open])>:not(summary) { display:none!important; }
+.gcp-compact .risk-head { margin-bottom:8px; padding:6px 0; }
+.gcp-compact .risk-factor-table { margin-top:8px; }
+.gcp-compact .risk-factor-table>div { padding:8px 10px; gap:9px; }
+.gcp-compact .lender-summary-metrics,.gcp-compact .lender-indicator-grid { gap:8px; }
+.gcp-compact .lender-indicator-grid { align-items:start; }
+.gcp-compact .lender-decision-summary,.gcp-compact .lender-review-card { padding:14px; }
+}
+.gcp-print-evidence { display:none; }
+@media print { .gcp-mode details { display:none; } .gcp-mode .gcp-print-evidence { display:block; flex-basis:100%; } }

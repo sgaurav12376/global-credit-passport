@@ -70,7 +70,7 @@ export type PassportOutput = {
       approvalRequiredForPilot: boolean;
     };
     verifiedSources: {
-      openBanking: null | { provider: string; summary: Record<string, unknown> };
+      openBanking: null | { provider: string; summary: Record<string, unknown>; methodologyVersion?: string; capturedAt?: string };
       creditBureau: null | {
         provider: string;
         bureau: string;
