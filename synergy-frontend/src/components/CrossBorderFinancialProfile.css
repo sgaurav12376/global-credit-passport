@@ -18,3 +18,14 @@
 .gcp-financial-details summary { cursor:pointer; color:#245a91; }
 .gcp-financial-profile .gcp-financial-footnote { font-size:.75rem; }
 @media print { .gcp-financial-country { break-inside:avoid; } .gcp-financial-profile { border:none; padding:0; } }
+
+/* Package 1C: country-local disclosures; one summary per country. */
+.gcp-financial-profile-grid { align-items:start; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); }
+.gcp-bank-heading { display:block; border-top:1px solid #dbe2ea; margin-top:.8rem; padding-top:.7rem; font-weight:650; color:#42526e; }
+.gcp-country-disclosure { border-top:1px solid #dbe2ea; margin-top:.7rem; padding-top:.6rem; min-width:0; }
+.gcp-country-disclosure>summary { cursor:pointer; color:#245a91; font-size:.82rem; font-weight:650; }
+.gcp-financial-country .gcp-primary-record { font-size:.78rem; margin:.65rem 0; }
+.gcp-financial-country .gcp-snapshot-note { display:grid; gap:.35rem; margin:.7rem 0; padding:.65rem; font-size:.78rem; }
+.gcp-financial-country .gcp-mini-scores { grid-template-columns:repeat(auto-fit,minmax(65px,1fr)); }
+.gcp-financial-country .gcp-country-disclosure[open] { overflow-wrap:anywhere; }
+@media print { .gcp-financial-country { break-inside:auto; } .gcp-financial-profile-grid { display:block; } .gcp-financial-country { margin:0 0 8pt; } }

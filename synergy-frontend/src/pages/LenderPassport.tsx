@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
+import { countryCode } from "../lib/countryRecords";
+import type { CountryCreditRecord } from "../lib/countryRecords";
 import { createLenderDocumentRequest, getLenderDocumentRequests, getSharedPassport, getSharedPassportReview, lenderDocumentDownloadUrl, subscribeLenderReviewEvents, updateLenderDocumentStatus, updateSharedPassportReview } from "../api/passport";
 import type { ReviewDocumentRequest, ReviewOutcome, ReviewStatus, SharedPassport } from "../api/passport";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
@@ -129,6 +131,11 @@ export default function LenderPassport() {
 
   const report = share.report;
   const risk = report.riskAssessment;
+  const countryCredit: CountryCreditRecord[] = (report.creditEvidenceSummary || []).map(row => ({countryCode: row.countryCode, provider: row.provider, bureau: row.sourceSystem, value: row.nativeValue, minimum: row.nativeMinimum, maximum: row.nativeMaximum, completeness: row.completenessPercent}));
+  // Legacy authorized reports may contain native references without credit summaries.
+  const summarizedCountries = new Set(countryCredit.map(row => countryCode(row.countryCode)));
+  for (const row of risk.nativeScoreReferences || []) if (!summarizedCountries.has(countryCode(row.countryCode))) countryCredit.push({countryCode: row.countryCode, provider: row.provider, bureau: row.bureau, value: row.nativeValue, minimum: row.nativeMinimum, maximum: row.nativeMaximum});
+
   const trace = risk.calculationTrace;
   const destinationCredit = (report.creditEvidenceSummary || []).filter((item) =>
     item.countryCode.toUpperCase() === report.corridor.destinationCountry.toUpperCase()
@@ -181,7 +188,10 @@ export default function LenderPassport() {
       </div>
       <p className="lender-decision-note">Profile index is not a credit score or approval recommendation.</p>
     </section>
-    <CrossBorderFinancialProfile evidence={report.financialEvidenceSummary} origin={report.corridor.originCountry} destination={report.corridor.destinationCountry}/>
+    <CrossBorderFinancialProfile evidence={report.financialEvidenceSummary} origin={report.corridor.originCountry} destination={report.corridor.destinationCountry} credit={countryCredit} details={code => <>
+      {risk.assessmentEvidence && countryCode(risk.assessmentEvidence.countryCode) === code && <p className="gcp-primary-record">Primary assessment record: {friendlyBureauLabel(risk.assessmentEvidence.sourceSystem)} · {risk.assessmentEvidence.completenessPercent}% complete. Individual factors may use eligible fallback evidence.</p>}
+      {code === countryCode(report.corridor.originCountry) && <p className="gcp-primary-record">Bureau consistency: {risk.confidence.consistencyComponent}%{consistencyNeedsReview ? " · Review needed" : ""}</p>}
+    </>}/>
     <section className="simple-card lender-review-card">
       <span className="eyebrow">REVIEW ACTIONS</span>
       <div className="review-status-line"><div><h2>Review actions</h2><p>Request information or record a non-binding outcome.</p></div><span className={`status-pill ${reviewStatus === "COMPLETED" ? "success" : "light"}`}>{reviewStatusLabel(reviewStatus)}</span></div>
@@ -232,7 +242,6 @@ export default function LenderPassport() {
       {risk.dimensionExplanations?.some((item) => ["DEBT_BURDEN", "CASHFLOW_CAPACITY", "INCOME_STABILITY"].includes(item.dimensionKey) && item.sourceCountry?.toUpperCase() === report.corridor.destinationCountry.toUpperCase()) && <div className="assessment-interpretation"><b>Affordability evidence scope</b><p>Debt burden and cash-flow factors currently reflect {report.corridor.destinationCountry} account activity. Continuing {report.corridor.originCountry} obligations are reviewed separately and are not combined across currencies without an auditable conversion.</p></div>}
       {Boolean(risk.dimensionExplanations?.length) && <details className="standardization-trace"><summary>View calculation methodology</summary><div className="standardization-list">{risk.dimensionExplanations?.map((item) => <article key={item.dimensionKey}><header><b>{words(item.dimensionKey)}</b><em>{item.score == null ? "Excluded" : `${item.score}/100`}</em></header><dl><div><dt>Observed result</dt><dd>{friendlyObservedValue(item.standardizedMetric, item.observedValue, item.unit)}</dd></div><div><dt>Evidence source</dt><dd>{friendlyEvidenceSource(item.sourceProvider, item.sourceCountry, item.evidenceStatus === "SYNTHETIC")}</dd></div><div><dt>Scoring rule</dt><dd>{item.scoringRule}</dd></div><div><dt>Weighted contribution</dt><dd>{item.weightedContribution == null ? "Excluded" : `${item.weightedContribution} points before available-weight normalization`}</dd></div></dl></article>)}</div></details>}
       {risk.crossBorderContext && <section className="cross-border-context"><span className="eyebrow">CROSS-BORDER INTERPRETATION</span><p><b>Evidence countries:</b> {risk.crossBorderContext.evidenceCountries.join(", ") || "Not recorded"}</p><p>{risk.crossBorderContext.currencyTreatment}</p><p>{risk.crossBorderContext.destinationPolicyTreatment}</p><ul>{risk.crossBorderContext.comparabilityNotes.map((note) => <li key={note}>{note}</li>)}</ul></section>}
-      {risk.nativeScoreReferences && risk.nativeScoreReferences.length > 0 && <div className="native-score-reference"><span className="eyebrow">SOURCE-COUNTRY NATIVE BUREAU SCORES</span><div>{risk.nativeScoreReferences.map((score) => <span key={`${score.provider}-${score.bureau}-${score.countryCode}`}><b>{score.nativeValue ?? "—"}</b><small>{score.bureau} · {score.countryCode}</small><em>Original bureau scale retained</em></span>)}</div><p>Scores are preserved in their original bureau models. GCP does not label, average or convert them into a destination-country score.</p></div>}
       {trace && (trace.availableConfiguredWeight > 0 && risk.riskIndex != null ? <div className="formula-box"><code>({risk.dimensions.filter((item) => item.available).map((item) => `${item.score} × ${item.configuredWeight}`).join(" + ")}) ÷ {trace.availableConfiguredWeight} = {risk.riskIndex}</code><small>{trace.availableConfiguredWeight} of {trace.totalConfiguredWeight} configured weight was available. Missing dimensions were excluded, not treated as zero.</small></div> : <div className="formula-box"><b>No scorable dimensions are currently available.</b><small>Connected evidence did not contain the structured metrics required by the current rules. No risk index was calculated.</small></div>)}
       <p className="risk-disclosure">Supporting-information readiness measures completeness and usability of the evidence. It does not increase or decrease the profile index.</p>
       </div>

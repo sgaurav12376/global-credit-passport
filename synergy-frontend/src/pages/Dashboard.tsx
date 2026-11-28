@@ -6,6 +6,8 @@ import { getAccessToken, logout } from "../auth/auth";
 import PassportSharing from "../components/PassportSharing";
 import OpenBankingEvidence from "../components/OpenBankingEvidence";
 import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
+import { countryCode } from "../lib/countryRecords";
+import type { CountryCreditRecord } from "../lib/countryRecords";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
 
 const PASSPORT_LS_KEY = "gcp.passportInit";
@@ -77,18 +79,6 @@ function stepForSection(section?: string | null): 1 | 2 | 3 | 4 {
   return 1;
 }
 
-function domainLabel(domain: string) {
-  const labels: Record<string, string> = { CREDIT: "Credit history", CASHFLOW: "Banking and cash flow" };
-  return labels[domain] || domain.charAt(0) + domain.slice(1).toLowerCase();
-}
-
-function evidenceStatusLabel(available: boolean, domain: string, isOrigin: boolean) {
-  if (available) return "Available";
-  if (domain === "CREDIT" && !isOrigin) return "No local credit file included";
-  if (domain === "CASHFLOW" && isOrigin) return "Provider connection not yet available";
-  return "Not connected";
-}
-
 function reconciliationMetricLabel(metric: string) {
   const labels: Record<string, string> = {
     totalAccounts: "Total accounts", activeAccounts: "Active accounts",
@@ -104,7 +94,7 @@ function reconciliationMetricLabel(metric: string) {
 function reconciliationRange(metric: string, minimum: number, maximum: number) {
   if (metric === "creditHistoryMonths") return `${minimum}–${maximum} months`;
   if (metric === "currentBalance" || metric === "sanctionedAmount") {
-    return `${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(minimum)}–${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(maximum)}`;
+    return `${minimum.toLocaleString()}–${maximum.toLocaleString()} (native units)`;
   }
   return `${minimum}–${maximum}`;
 }
@@ -144,20 +134,7 @@ export default function Dashboard() {
     if (!output || !active) return null;
     const origin = active.originCountry.toUpperCase();
     const destination = active.destCountry.toUpperCase();
-    const evidence = output.document.normalizedEvidence || [];
-    const hasEvidence = (domain: string, country: string) => evidence.some((item) => item.domain === domain && item.countryCode.toUpperCase() === country);
-    const creditCountry = evidence.find((item) => item.domain === "CREDIT")?.countryCode.toUpperCase() || origin;
-    const cashflowCountry = evidence.find((item) => item.domain === "CASHFLOW")?.countryCode.toUpperCase() || destination;
-    const available = (domain: string, country: string) => hasEvidence(domain, country)
-      || (domain === "CREDIT" && output.document.coverage.creditBureauAvailable && creditCountry === country)
-      || (domain === "CASHFLOW" && output.document.coverage.openBankingAvailable && cashflowCountry === country);
-    const cells = [
-      { country: origin, domain: "CREDIT", available: available("CREDIT", origin), isOrigin: true },
-      { country: origin, domain: "CASHFLOW", available: available("CASHFLOW", origin), isOrigin: true },
-      { country: destination, domain: "CREDIT", available: available("CREDIT", destination), isOrigin: false },
-      { country: destination, domain: "CASHFLOW", available: available("CASHFLOW", destination), isOrigin: false },
-    ];
-    return { origin, destination, cells };
+    return { origin, destination };
   }, [active, output]);
   const destinationCreditEvidence = useMemo(() => {
     if (!output || !active) return [];
@@ -166,6 +143,17 @@ export default function Dashboard() {
       item.domain === "CREDIT" && item.countryCode.toUpperCase() === destination
     );
   }, [active, output]);
+  const countryCredit = useMemo<CountryCreditRecord[]>(() => {
+    if (!output || !financialEvidence) return [];
+    const rows: CountryCreditRecord[] = (output.document.normalizedEvidence || []).filter(item => item.domain === "CREDIT").map(item => {
+      const score = evidenceNativeScore(item);
+      return {countryCode: item.countryCode, provider: item.provider, bureau: item.sourceSystem, value: score?.value, minimum: score?.minimum, maximum: score?.maximum, completeness: item.completenessPercent};
+    });
+    if (!rows.some(row => countryCode(row.countryCode) === countryCode(financialEvidence.origin))) {
+      for (const score of output.document.creditReconciliation?.nativeScores || []) rows.push({countryCode: financialEvidence.origin, provider: score.provider, bureau: score.bureau, value: score.value, minimum: score.minimum, maximum: score.maximum});
+    }
+    return rows;
+  }, [output, financialEvidence]);
   const assessmentOrigin = financialEvidence?.origin || active?.originCountry?.toUpperCase() || "";
   const assessmentDestination = financialEvidence?.destination || active?.destCountry?.toUpperCase() || "";
 
@@ -277,63 +265,23 @@ export default function Dashboard() {
           <article><span>Key indicators</span><div className="command-signal-columns"><div><small>Needs review</small>{attentionDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div><div><small>Supporting</small>{positiveDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div></div></article>
           <article><span>Evidence readiness</span><strong>{output.document.riskAssessment.confidence.score}%</strong><b>Analytical readiness</b><small>{consistencyScore != null && consistencyScore < 60 ? `Bureau agreement ${consistencyScore}% · review differences` : "Records are substantially complete"}</small></article>
         </div>}
-        {financialEvidence && <section className="command-evidence"><header><span className="eyebrow">INFORMATION INCLUDED</span><button type="button" onClick={() => setDashboardView("financial")}>Review records</button></header><div>
-          <article><span className="country-chip">{financialEvidence.origin}</span><p><b>{countryLabel(financialEvidence.origin)} credit history</b><small>{output.document.creditReconciliation?.bureauCount || 0} bureau record{output.document.creditReconciliation?.bureauCount === 1 ? "" : "s"} included</small></p></article>
-          {destinationCreditEvidence.length > 0 && <article><span className="country-chip">{financialEvidence.destination}</span><p><b>{countryLabel(financialEvidence.destination)} credit history</b><small>{destinationCreditEvidence.length} local bureau record{destinationCreditEvidence.length === 1 ? "" : "s"} included</small></p></article>}
-          <article><span className="country-chip">{financialEvidence.destination}</span><p><b>{countryLabel(financialEvidence.destination)} banking and cash flow</b><small>{output.document.coverage.openBankingAvailable ? "Connected account analysis included" : "Not connected"}</small></p></article>
+        {financialEvidence && <section className="command-evidence"><header><span className="eyebrow">FINANCIAL FOOTPRINT</span><button type="button" onClick={() => setDashboardView("financial")}>Review records</button></header><div>
+          {[...new Set([financialEvidence.origin, financialEvidence.destination, ...countryCredit.map(row => row.countryCode), ...(output.document.financialEvidenceSummary || []).map(row => row.countryCode)].map(countryCode).filter(Boolean))].map(code => <article key={code}><span className="country-chip">{code}</span><p><b>{countryLabel(code)}</b><small>{countryCredit.filter(row => countryCode(row.countryCode) === code).length} credit records · {(output.document.financialEvidenceSummary || []).some(row => countryCode(row.countryCode) === code) ? "Banking evidence included" : "No published banking evidence"}</small></p></article>)}
         </div></section>}
         </>}
         {dashboardView === "financial" && financialEvidence && <div className="financial-records-view">
-          <CrossBorderFinancialProfile evidence={output.document.financialEvidenceSummary} origin={financialEvidence.origin} destination={financialEvidence.destination} credit={{
-            [financialEvidence.origin]: <><small>Credit history · {output.document.creditReconciliation?.bureauCount || 0} records</small><div className="gcp-mini-scores">{output.document.creditReconciliation?.nativeScores.map(score => <div key={`${score.provider}-${score.bureau}`}><span>{friendlyBureauLabel(score.bureau)}</span><b>{score.value ?? "—"}</b><small>{score.minimum != null && score.maximum != null ? `${score.minimum}–${score.maximum}` : "Native scale"}</small></div>)}</div></>,
-            [financialEvidence.destination]: <><small>Credit history · {destinationCreditEvidence.length} records</small><div className="gcp-mini-scores">{destinationCreditEvidence.map(item => { const score = evidenceNativeScore(item); return <div key={item.evidenceId || `${item.provider}-${item.sourceSystem}`}><span>{friendlyBureauLabel(item.sourceSystem)}</span><b>{score?.value ?? "—"}</b><small>{score?.minimum != null && score.maximum != null ? `${score.minimum}–${score.maximum}` : "Native scale"}</small></div>; })}</div></>
-          }}/>
-          {output.document.coverage.openBankingAvailable && !output.document.financialEvidenceSummary?.some(item => item.countryCode === financialEvidence.destination && item.currencyCode) && <div className="gcp-snapshot-note"><b>Published cash flow needs currency validation.</b><span>Live account details can be newer than this report. Update and publish using existing accounts to recalculate.</span><button type="button" className="text-button" onClick={() => active && open(active, "view")}>Open passport</button><details><summary>Snapshot diagnostics</summary><div>Published: {new Date(output.createdAt).toLocaleString()}</div><div>Snapshot method: {output.document.verifiedSources.openBanking?.methodologyVersion || "Not recorded"}</div><div>Snapshot currency: {typeof output.document.verifiedSources.openBanking?.summary.currencyCode === "string" ? String(output.document.verifiedSources.openBanking?.summary.currencyCode) : "Unconfirmed"}</div><div>Snapshot captured: {output.document.verifiedSources.openBanking?.capturedAt ? new Date(output.document.verifiedSources.openBanking.capturedAt).toLocaleString() : "Not recorded"}</div></details></div>}
-          <details className="records-detail-section corridor-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, coverage: open })); }}>
-            <summary><span><b>Evidence coverage</b><small>Included and missing records</small></span><em>View map</em></summary>
-            {openRecordSections.coverage && <div className="records-detail-content">
-            <div className="section-heading-row"><div><span className="eyebrow">CROSS-BORDER EVIDENCE MAP</span><h3>Information included in your profile</h3><p>This map shows what is available from each country. An unavailable category is not treated as negative information.</p></div><div className="included-evidence-summary"><span>Included evidence</span><b>{countryLabel(financialEvidence.origin)} credit history</b>{destinationCreditEvidence.length > 0 && <b>{countryLabel(financialEvidence.destination)} credit history</b>}<b>{countryLabel(financialEvidence.destination)} banking and cash flow</b></div></div>
-            <div className="corridor-evidence-matrix">
-              {[financialEvidence.origin, financialEvidence.destination].map((country) => <section key={country}>
-                <header><span>{country === financialEvidence.origin ? "Financial history from" : "Applying in"}</span><b>{countryLabel(country)}</b><small>{country}</small></header>
-                {financialEvidence.cells.filter((item) => item.country === country).map((item) => <div className={`evidence-cell ${item.available ? "available" : "unavailable"}`} key={`${item.country}-${item.domain}`}>
-                  <span className="evidence-cell-icon" aria-hidden="true">{item.available ? "✓" : "○"}</span><p><b>{domainLabel(item.domain)}</b><small>{evidenceStatusLabel(item.available, item.domain, item.isOrigin)}</small></p><em>{item.available ? "Included" : "Not included"}</em>
-                </div>)}
-              </section>)}
-            </div>
-            </div>}
-          </details>
-
-          <details className="records-detail-section financial-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, credit: open })); }}>
-            <summary><span><b>{countryLabel(financialEvidence.origin)} credit records</b><small>Native bureau scores, selected assessment record and bureau differences</small></span><em>View credit details</em></summary>
-            {openRecordSections.credit && <div className="records-detail-content">
-            <div className="financial-section-title"><span className="country-chip">{financialEvidence.origin}</span><div><span className="eyebrow">SOURCE-COUNTRY RECORD</span><h3>{countryLabel(financialEvidence.origin)} credit history</h3><p>Your existing credit record, preserved in its original scoring model and standardized for review.</p></div></div>
-            {output.document.creditReconciliation && output.document.creditReconciliation.bureauCount > 0 ? <>
-              <div className="bureau-score-heading"><div><b>Native bureau scores</b><p>Each score remains in its original bureau model. GCP does not average or convert these scores into a U.S. credit score.</p></div><span>{output.document.creditReconciliation.bureauCount} bureau records</span></div>
-              <div className="native-score-row">{output.document.creditReconciliation.nativeScores.map((score) => <article key={`${score.provider}-${score.bureau}`}><span>{friendlyBureauLabel(score.bureau)}</span><strong>{score.value ?? "—"}</strong><b>Native score</b><small>{score.minimum != null && score.maximum != null ? `Original range ${score.minimum}–${score.maximum}` : "Original scale retained"}</small></article>)}</div>
-              {output.document.riskAssessment?.assessmentEvidence?.countryCode.toUpperCase() === financialEvidence.origin && <div className="assessment-evidence-banner"><div><span className="eyebrow">PRIMARY CREDIT RECORD</span><b>{friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} structured record</b><p>This source-country record is used only where no higher-ranked eligible destination-country record supplies the required metric.</p></div><small>{output.document.riskAssessment.assessmentEvidence.completenessPercent}% complete</small></div>}
+          <CrossBorderFinancialProfile evidence={output.document.financialEvidenceSummary} origin={financialEvidence.origin} destination={financialEvidence.destination} credit={countryCredit} details={code => <>
+            {output.document.riskAssessment?.assessmentEvidence?.countryCode.toUpperCase() === code && <p className="gcp-primary-record">Primary assessment record: {friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} · {output.document.riskAssessment.assessmentEvidence.completenessPercent}% complete. Individual factors may use eligible fallback evidence.</p>}
+            {code === countryCode(financialEvidence.origin) && output.document.creditReconciliation && <>
+              {consistencyScore != null && <p className="gcp-primary-record">Bureau consistency: {consistencyScore}%{consistencyScore < 60 ? " · Review differences" : ""}</p>}
               {output.document.creditReconciliation.summaryRanges && Object.entries(output.document.creditReconciliation.summaryRanges).some(([, range]) => range.disagreement) && <details className="bureau-difference-panel"><summary><span><b>Cross-bureau differences identified</b><small>Values can differ because bureaus may receive updates at different times.</small></span><em>Review differences</em></summary><div>{Object.entries(output.document.creditReconciliation.summaryRanges).filter(([, range]) => range.disagreement).map(([metric, range]) => <p key={metric}><b>{reconciliationMetricLabel(metric)}</b><span>{reconciliationRange(metric, range.minimum, range.maximum)}</span><small>Reported by {range.reportingBureaus} bureaus</small></p>)}</div></details>}
-            </> : <div className="evidence-placeholder"><b>No source-country credit record is included</b><p>Connect an available credit-data provider to add this category.</p></div>}
-            </div>}
-          </details>
-
-          {destinationCreditEvidence.length > 0 && <details className="records-detail-section financial-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, destinationCredit: open })); }}>
-            <summary><span><b>{countryLabel(financialEvidence.destination)} credit records</b><small>Local bureau scores and available standardized information</small></span><em>View credit details</em></summary>
-            {openRecordSections.destinationCredit && <div className="records-detail-content">
-              <div className="financial-section-title"><span className="country-chip">{financialEvidence.destination}</span><div><span className="eyebrow">DESTINATION-COUNTRY RECORD</span><h3>{countryLabel(financialEvidence.destination)} credit history</h3><p>These local credit records remain separate from source-country bureau records and are not averaged with them.</p></div></div>
-              <div className="native-score-row">{destinationCreditEvidence.map((item) => { const score = evidenceNativeScore(item); return <article key={item.evidenceId || `${item.provider}-${item.sourceSystem}`}><span>{friendlyBureauLabel(item.sourceSystem)}</span><strong>{score?.value ?? "—"}</strong><b>Native score</b><small>{score?.minimum != null && score.maximum != null ? `Original range ${score.minimum}–${score.maximum}` : "Original scale retained"}</small><small>Credit-bureau record · {item.completenessPercent}% complete</small></article>; })}</div>
-              {output.document.riskAssessment?.assessmentEvidence?.countryCode.toUpperCase() !== financialEvidence.destination && <div className="assessment-evidence-banner"><div><span className="eyebrow">SUPPORTING EVIDENCE</span><b>Not selected as the primary record</b><p>These records remain available for lender review. Provider-supplied records rank above synthetic test data; otherwise an eligible destination-country record has priority.</p></div></div>}
-            </div>}
-          </details>}
-
-          <details className="records-detail-section financial-evidence-section" onToggle={(event) => { const open = event.currentTarget.open; setOpenRecordSections((current) => ({ ...current, banking: open })); }}>
-            <summary><span><b>{countryLabel(financialEvidence.destination)} financial accounts</b><small>Live account details · may differ from published report</small></span><em>View banking details</em></summary>
-            {openRecordSections.banking && <div className="records-detail-content">
-              <div className="financial-section-title"><span className="country-chip">{financialEvidence.destination}</span><div><span className="eyebrow">DESTINATION-COUNTRY RECORD</span><h3>Live account information</h3><p>Current connected accounts, not the published snapshot.</p></div></div>
-              {output.document.coverage.openBankingAvailable ? <OpenBankingEvidence passportId={output.passportId}/> : <div className="evidence-placeholder"><b>No destination-country financial accounts are connected</b><p>Connect eligible accounts to add income and cash-flow evidence.</p></div>}
-            </div>}
-          </details>
-          <p className="records-footnote">Categories shown as unavailable in the corridor map are not scored as zero. The destination lender applies its own eligibility and underwriting policy.</p>
+            </>}
+            {code === countryCode(financialEvidence.destination) && <>
+              {output.document.coverage.openBankingAvailable && !output.document.financialEvidenceSummary?.some(item => item.countryCode === financialEvidence.destination && item.currencyCode) && <div className="gcp-snapshot-note"><b>Published cash flow needs currency validation.</b><span>Live account details can be newer than this report. Update and publish using existing accounts to recalculate.</span><button type="button" className="text-button" onClick={() => active && open(active, "view")}>Open passport</button><details><summary>Snapshot diagnostics</summary><div>Published: {new Date(output.createdAt).toLocaleString()}</div><div>Snapshot method: {output.document.verifiedSources.openBanking?.methodologyVersion || "Not recorded"}</div><div>Snapshot currency: {typeof output.document.verifiedSources.openBanking?.summary.currencyCode === "string" ? String(output.document.verifiedSources.openBanking?.summary.currencyCode) : "Unconfirmed"}</div><div>Snapshot captured: {output.document.verifiedSources.openBanking?.capturedAt ? new Date(output.document.verifiedSources.openBanking.capturedAt).toLocaleString() : "Not recorded"}</div></details></div>}
+              {output.document.coverage.openBankingAvailable && <details className="gcp-country-disclosure" onToggle={event => { const open = event.currentTarget.open; setOpenRecordSections(current => ({...current, banking: open})); }}><summary>Live connected accounts</summary><p>Current account information may differ from the published report.</p>{openRecordSections.banking && <OpenBankingEvidence passportId={output.passportId}/>}</details>}
+            </>}
+          </>}/>
+          <p className="records-footnote">Missing evidence is not scored as zero. The lender applies its own underwriting policy.</p>
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("score")}>Continue to financial assessment</button></div>
         </div>}
         {dashboardView === "score" && output.document.riskAssessment && <div className="risk-panel">
