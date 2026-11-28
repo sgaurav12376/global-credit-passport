@@ -26,7 +26,7 @@ export function friendlyObservedValue(metric: string, value: number | string | n
       : "Late-payment information reported";
   }
   if (metric === "credit.utilization_ratio") return `${value}% of available credit used`;
-  if (metric === "cashflow.debt_to_income_ratio") return `Debt payments equal ${value}% of income`;
+  if (metric === "cashflow.debt_to_income_ratio") return `Observed repayments equal ${value}% of identified income`;
   if (metric === "cashflow.net_cashflow_to_income_ratio") return `Net cash flow equals ${value}% of income`;
   if (metric === "cashflow.income_stability_percent") return `${value}% income stability`;
   if (metric === "credit.recent_enquiries") return `${value} recent credit ${numericValue === 1 ? "enquiry" : "enquiries"}`;

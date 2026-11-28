@@ -101,7 +101,7 @@ class PassportOutputServiceTest {
         document.path("creditReconciliation").path("schemaVersion").asText());
     assertEquals("GCP_RISK_ASSESSMENT_V7",
         document.path("riskAssessment").path("schemaVersion").asText());
-    assertEquals("GCP_RULES_V1_7",
+    assertEquals("GCP_RULES_V1_8",
         document.path("riskAssessment").path("modelVersion").asText());
     assertEquals("WEIGHTED_MEAN_OF_AVAILABLE_DIMENSIONS", document.path("riskAssessment")
         .path("calculationTrace").path("aggregationMethod").asText());

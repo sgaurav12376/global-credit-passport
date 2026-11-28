@@ -25,8 +25,8 @@ export default function CrossBorderFinancialProfile({ evidence, origin, destinat
       {rows.filter(r => countryCode(r.countryCode) === code).map((r,i) => <div className="gcp-financial-source" key={`${r.provider}-${r.sourceSystem}-${i}`}>
         <p className="gcp-source-label">{r.provider} · {environments[r.evidenceEnvironment] || environments.UNKNOWN}</p>
         {!r.currencyCode ? <p className="gcp-financial-caution">Published currency unconfirmed. Metrics withheld.</p> : <>
-          <div className="gcp-income"><small>Monthly income</small><strong>{money(r.metrics.averageMonthlyIncome,r.currencyCode)}</strong></div>
-          <dl><div><dt>Debt payments</dt><dd>{money(r.metrics.averageMonthlyDebtPayments,r.currencyCode)}</dd></div><div><dt>Net cash flow</dt><dd>{money(r.metrics.averageMonthlyNetCashflow,r.currencyCode)}</dd></div><div><dt>Income stability</dt><dd>{percent(r.metrics.incomeStabilityPercent)}</dd></div></dl>
+          <div className="gcp-income"><small>Identified monthly income</small><strong>{money(r.metrics.averageMonthlyIncome,r.currencyCode)}</strong></div>
+          <dl><div><dt>Observed debt repayments</dt><dd>{money(r.metrics.averageMonthlyDebtPayments,r.currencyCode)}</dd></div><div><dt>Observed net cash flow</dt><dd>{money(r.metrics.averageMonthlyNetCashflow,r.currencyCode)}</dd></div><div><dt>Income stability</dt><dd>{percent(r.metrics.incomeStabilityPercent)}</dd></div></dl>
         </>}
         <details className="gcp-financial-details"><summary>Evidence details</summary><p>{r.metrics.coverageStart || "Unknown"} – {r.metrics.coverageEnd || "Unknown"} · {r.metrics.completeMonthsAnalyzed ?? "Unknown"} complete months</p>{r.currencyCode && <dl><div><dt>Monthly outflows</dt><dd>{money(r.metrics.averageMonthlyOutflows,r.currencyCode)}</dd></div><div><dt>Observed debt / income</dt><dd>{percent(r.metrics.debtToIncomePercent)}</dd></div><div><dt>Net cash flow / income</dt><dd>{percent(r.metrics.netCashflowToIncomePercent)}</dd></div></dl>}</details>
       </div>)}

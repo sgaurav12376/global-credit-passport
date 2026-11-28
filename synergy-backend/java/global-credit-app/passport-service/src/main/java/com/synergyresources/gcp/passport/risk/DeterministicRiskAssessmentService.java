@@ -11,6 +11,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -22,7 +24,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class DeterministicRiskAssessmentService {
-  public static final String MODEL_VERSION = "GCP_RULES_V1_7";
+  public static final String MODEL_VERSION = "GCP_RULES_V1_8";
 
   public RiskAssessment assess(
       List<NormalizedEvidence> evidence,
@@ -69,6 +71,9 @@ public class DeterministicRiskAssessmentService {
     List<String> disclosures = new ArrayList<>();
     disclosures.add("Pilot risk intelligence only; this is not a lender approval decision");
     disclosures.add("Missing dimensions are excluded, never treated as zero");
+    disclosures.add("Cash-flow factors require confirmed currency and at least two complete months");
+    disclosures.add("Detected debt payments are not confirmed total contractual obligations");
+    disclosures.add("Cash-flow freshness uses observation end date; other domains use retrieval-date proxies");
     disclosures.add("Native bureau scores are preserved and are not averaged");
     disclosures.add("Native score range position is a reference, not a cross-bureau equivalence");
     disclosures.add("Recent enquiries use the reporting window defined by the source bureau");
@@ -432,7 +437,7 @@ public class DeterministicRiskAssessmentService {
       return unavailable("DEBT_BURDEN", "Debt burden", 14,
           "POSITIVE_ANALYZED_INCOME_UNAVAILABLE");
     }
-    if (debt == null) {
+    if (debt == null || debt.signum() < 0) {
       return unavailable("DEBT_BURDEN", "Debt burden", 14,
           "DEBT_PAYMENT_METRIC_UNAVAILABLE");
     }
@@ -476,7 +481,8 @@ public class DeterministicRiskAssessmentService {
     );
     JsonNode metrics = cashflow.getPayload().path("metrics");
     BigDecimal stability = decimal(metrics, "incomeStabilityPercent");
-    if (stability == null) {
+    if (stability == null || stability.signum() < 0 || stability.compareTo(BigDecimal.valueOf(100)) > 0
+        || !hasPositive(cashflow, "metrics", "averageMonthlyIncome")) {
       Integer completeMonths = integer(metrics, "completeMonthsAnalyzed");
       if (completeMonths == null || completeMonths < 2) return unavailable(
           "INCOME_STABILITY", "Income stability", 13,
@@ -567,7 +573,8 @@ public class DeterministicRiskAssessmentService {
 
   private boolean isSynthetic(NormalizedEvidence evidence) {
     return evidence != null && (
-        "GCP_SIMULATOR".equals(evidence.getProvider())
+        (evidence.getPayload() != null && "SYNTHETIC".equals(evidence.getPayload().path("evidenceEnvironment").asText()))
+            || "GCP_SIMULATOR".equals(evidence.getProvider())
             || (evidence.getSourceSystem() != null
                 && evidence.getSourceSystem().toUpperCase().contains("SIMULATED"))
             || (evidence.getProviderReference() != null
@@ -576,8 +583,25 @@ public class DeterministicRiskAssessmentService {
   }
 
   private int freshness(NormalizedEvidence evidence) {
-    if (evidence.getRetrievedAt() == null) return 0;
-    long days = Math.max(0, Duration.between(evidence.getRetrievedAt(), Instant.now()).toDays());
+    Instant now = Instant.now();
+    long days;
+    if ("CASHFLOW".equals(evidence.getDomain())) {
+      if (evidence.getPayload() == null) return 0;
+      JsonNode end = evidence.getPayload().path("metrics").path("coverageEnd");
+      try {
+        LocalDate observed = end.isTextual() ? LocalDate.parse(end.asText())
+            : end.isArray() && end.size() == 3 && end.get(0).isIntegralNumber()
+                && end.get(1).isIntegralNumber() && end.get(2).isIntegralNumber()
+                ? LocalDate.of(end.get(0).intValue(), end.get(1).intValue(), end.get(2).intValue()) : null;
+        LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
+        if (observed == null || observed.isAfter(today)) return 0;
+        days = java.time.temporal.ChronoUnit.DAYS.between(observed, today);
+      } catch (RuntimeException invalidDate) { return 0; }
+    } else {
+      // Other domains retain the previous retrieval-date proxy pending reliable observation metadata.
+      if (evidence.getRetrievedAt() == null || evidence.getRetrievedAt().isAfter(now)) return 0;
+      days = Duration.between(evidence.getRetrievedAt(), now).toDays();
+    }
     return days <= 30 ? 100 : days <= 90 ? 80 : days <= 180 ? 60 : days <= 365 ? 40 : 20;
   }
 
@@ -621,11 +645,22 @@ public class DeterministicRiskAssessmentService {
             ? Instant.EPOCH : item.getRetrievedAt());
   }
 
+  // Legacy and incomplete monetary snapshots must not contribute to any cash-flow factor.
+  private boolean eligibleCashflow(NormalizedEvidence item) {
+    if (item.getPayload() == null) return false;
+    JsonNode payload = item.getPayload();
+    String currency = com.synergyresources.gcp.passport.plaid.PlaidCurrencyValidation
+        .confirmedCurrency(1, 1, 0, payload.path("currencyCode").asText(null));
+    JsonNode months = payload.path("metrics").path("completeMonthsAnalyzed");
+    return currency != null && months.isIntegralNumber() && months.canConvertToInt()
+        && months.intValue() >= 2;
+  }
+
   private NormalizedEvidence bestCashflow(
       List<NormalizedEvidence> evidence, String originCountry, String destinationCountry,
       Predicate<NormalizedEvidence> eligible
   ) {
-    return evidence.stream().filter(item -> "CASHFLOW".equals(item.getDomain())).filter(eligible)
+    return evidence.stream().filter(item -> "CASHFLOW".equals(item.getDomain())).filter(this::eligibleCashflow).filter(eligible)
         .max(countryAwareComparator(originCountry, destinationCountry)).orElse(null);
   }
 
@@ -665,7 +700,7 @@ public class DeterministicRiskAssessmentService {
 
   private String selectionReason(String country, String originCountry, String destinationCountry) {
     if (country == null) return "NO_ELIGIBLE_EVIDENCE";
-    if (sameCountry(country, destinationCountry)) return "VERIFIED_DESTINATION_COUNTRY_PRIORITY";
+    if (sameCountry(country, destinationCountry)) return "DESTINATION_COUNTRY_PRIORITY";
     if (sameCountry(country, originCountry)) return "SOURCE_COUNTRY_FALLBACK";
     return "BEST_ELIGIBLE_RECORD";
   }

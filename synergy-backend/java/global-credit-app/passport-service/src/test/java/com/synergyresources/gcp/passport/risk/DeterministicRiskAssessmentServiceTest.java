@@ -26,7 +26,7 @@ class DeterministicRiskAssessmentServiceTest {
          "creditHistoryMonths":72,"recentEnquiries":2}}
         """);
     NormalizedEvidence cashflow = evidence("CASHFLOW", 83, """
-        {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
+        {"currencyCode":"USD","metrics":{"completeMonthsAnalyzed":6,"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
          "averageMonthlyNetCashflow":1800,"incomeStabilityPercent":88}}
         """);
     NormalizedEvidence identity = evidence("IDENTITY", 100,
@@ -40,7 +40,7 @@ class DeterministicRiskAssessmentServiceTest {
     assertEquals("CALCULATED", result.status());
     assertNotNull(result.riskIndex());
     assertEquals("GCP_RISK_ASSESSMENT_V7", result.schemaVersion());
-    assertEquals("GCP_RULES_V1_7", result.modelVersion());
+    assertEquals("GCP_RULES_V1_8", result.modelVersion());
     assertEquals(7, result.dimensions().stream().filter(RiskAssessment.Dimension::available).count());
     assertTrue(result.confidence().score() < result.riskIndex());
     assertEquals(25, result.confidence().identityAssuranceComponent());
@@ -86,7 +86,7 @@ class DeterministicRiskAssessmentServiceTest {
          "creditHistoryMonths":18}}
         """);
     NormalizedEvidence cashflow = evidence("CASHFLOW", 50,
-        "{\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
+        "{\"currencyCode\":\"USD\",\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
     NormalizedEvidence identity = evidence("IDENTITY", 100,
         "{\"status\":\"DECLINED\",\"verified\":false}");
     List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
@@ -113,7 +113,7 @@ class DeterministicRiskAssessmentServiceTest {
          "creditHistoryMonths":120,"recentEnquiries":1}}
         """);
     NormalizedEvidence cashflow = evidence("CASHFLOW", 83,
-        "{\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
+        "{\"currencyCode\":\"USD\",\"metrics\":{\"completeMonthsAnalyzed\":5,\"averageMonthlyIncome\":0}}");
     NormalizedEvidence identity = evidence("IDENTITY", 100,
         "{\"status\":\"DECLINED\",\"verified\":false}");
     List<NormalizedEvidence> all = List.of(identity, credit, cashflow);
@@ -181,7 +181,7 @@ class DeterministicRiskAssessmentServiceTest {
         new CreditBureauReconciliationService().reconcile(List.of(cashflow))
     );
 
-    assertEquals("INSUFFICIENT_COMPLETE_MONTHS_FOR_STABILITY", result.dimensions().stream()
+    assertEquals("CASHFLOW_EVIDENCE_UNAVAILABLE", result.dimensions().stream()
         .filter(dimension -> "INCOME_STABILITY".equals(dimension.key()))
         .findFirst().orElseThrow().reasonCodes().get(0));
   }
@@ -228,7 +228,7 @@ class DeterministicRiskAssessmentServiceTest {
     credit.setProvider("GCP_SIMULATOR");
     credit.setSourceSystem("CIBIL_SIMULATED");
     NormalizedEvidence cashflow = evidence("CASHFLOW", 100, """
-        {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
+        {"currencyCode":"USD","metrics":{"completeMonthsAnalyzed":6,"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":500,
         "averageMonthlyNetCashflow":1800,"incomeStabilityPercent":100}}
         """);
     NormalizedEvidence identity = evidence("IDENTITY", 100,
@@ -302,12 +302,12 @@ class DeterministicRiskAssessmentServiceTest {
   @Test
   void prefersDestinationCashflowAndFlagsUnverifiedSourceObligations() throws Exception {
     NormalizedEvidence source = evidence("CASHFLOW", 100, """
-        {"metrics":{"averageMonthlyIncome":5000,"averageMonthlyDebtPayments":1000,
+        {"currencyCode":"USD","metrics":{"completeMonthsAnalyzed":6,"averageMonthlyIncome":5000,"averageMonthlyDebtPayments":1000,
         "averageMonthlyNetCashflow":1000,"incomeStabilityPercent":80}}
         """);
     source.setCountryCode("IN");
     NormalizedEvidence destination = evidence("CASHFLOW", 90, """
-        {"metrics":{"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":300,
+        {"currencyCode":"USD","metrics":{"completeMonthsAnalyzed":6,"averageMonthlyIncome":6000,"averageMonthlyDebtPayments":300,
         "averageMonthlyNetCashflow":1800,"incomeStabilityPercent":95}}
         """);
     destination.setCountryCode("US");
@@ -319,6 +319,39 @@ class DeterministicRiskAssessmentServiceTest {
 
     assertEquals("US", explanation(result, "DEBT_BURDEN").sourceCountry());
     assertEquals("DESTINATION_PRIMARY", explanation(result, "CASHFLOW_CAPACITY").evidenceRole());
+  }
+
+  @Test
+  void rejectsLegacyMixedAndShortCashflowEvenWhenMetricsExist() throws Exception {
+    for (String fields : List.of("", "\"currencyCode\":null,", "\"currencyCode\":\"XXX\",", "\"currencyCode\":\"USD\",")) {
+      int months = fields.contains("USD") ? 1 : 6;
+      NormalizedEvidence cash = evidence("CASHFLOW", 100, "{" + fields
+          + "\"metrics\":{\"completeMonthsAnalyzed\":" + months
+          + ",\"averageMonthlyIncome\":1000,\"averageMonthlyDebtPayments\":50,"
+          + "\"averageMonthlyNetCashflow\":700,\"incomeStabilityPercent\":100}}");
+      var all = List.of(cash);
+      var r = service.assess(all, new EvidenceCoverageCalculator().calculate(all),
+          new CreditBureauReconciliationService().reconcile(all));
+      for (String key : List.of("DEBT_BURDEN", "CASHFLOW_CAPACITY", "INCOME_STABILITY")) {
+        assertEquals(null, explanation(r, key).score());
+        assertEquals(null, explanation(r, key).observedValue());
+      }
+      assertEquals(null, r.riskIndex());
+    }
+  }
+
+  @Test
+  void cashflowFreshnessUsesObservationNotRetrieval() throws Exception {
+    String end = java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(47).toString();
+    var cash = evidence("CASHFLOW", 100, "{\"currencyCode\":\"USD\",\"metrics\":{"
+        + "\"completeMonthsAnalyzed\":6,\"coverageEnd\":\"" + end + "\","
+        + "\"averageMonthlyIncome\":1000,\"averageMonthlyDebtPayments\":50,"
+        + "\"averageMonthlyNetCashflow\":700,\"incomeStabilityPercent\":100}}");
+    var all = List.of(cash);
+    var r = service.assess(all, new EvidenceCoverageCalculator().calculate(all),
+        new CreditBureauReconciliationService().reconcile(all));
+    assertEquals(80, r.confidence().freshnessComponent());
+    assertEquals("5.0", explanation(r, "DEBT_BURDEN").observedValue());
   }
 
   private RiskAssessment.DimensionExplanation explanation(RiskAssessment result, String key) {

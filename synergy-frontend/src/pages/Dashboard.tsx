@@ -6,6 +6,7 @@ import { getAccessToken, logout } from "../auth/auth";
 import PassportSharing from "../components/PassportSharing";
 import OpenBankingEvidence from "../components/OpenBankingEvidence";
 import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
+import AssessmentEvidenceNotice from "../components/AssessmentEvidenceNotice";
 import { countryCode } from "../lib/countryRecords";
 import type { CountryCreditRecord } from "../lib/countryRecords";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
@@ -112,8 +113,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [dashboardView, setDashboardView] = useState<"overview" | "financial" | "score" | "sharing">("overview");
   const [openRecordSections, setOpenRecordSections] = useState<Record<string, boolean>>({});
-  const [showAssessmentDetails, setShowAssessmentDetails] = useState(false);
-  useEffect(() => { setOpenRecordSections({}); setShowAssessmentDetails(false); }, [dashboardView]);
+  useEffect(() => { setOpenRecordSections({}); }, [dashboardView]);
   const [latest, setLatest] = useState<PassportView | null>(null);
   const [history, setHistory] = useState<PassportView[]>([]);
   const [output, setOutput] = useState<PassportOutput | null>(null);
@@ -126,7 +126,6 @@ export default function Dashboard() {
   const currentApplication = useMemo(() => shares.find((share) => share.status === "ACTIVE") || null, [shares]);
   const latestLenderAccess = useMemo(() => shares[0] || null, [shares]);
   const assessmentDimensions = output?.document.riskAssessment?.dimensions || [];
-  const assessmentExplanations = output?.document.riskAssessment?.dimensionExplanations || [];
   const positiveDimensions = assessmentDimensions.filter((item) => item.available && item.score != null && item.score >= 70).slice(0, 4);
   const attentionDimensions = assessmentDimensions.filter((item) => item.available && item.score != null && item.score < 70).slice(0, 3);
   const consistencyScore = output?.document.riskAssessment?.confidence.consistencyComponent;
@@ -135,13 +134,6 @@ export default function Dashboard() {
     const origin = active.originCountry.toUpperCase();
     const destination = active.destCountry.toUpperCase();
     return { origin, destination };
-  }, [active, output]);
-  const destinationCreditEvidence = useMemo(() => {
-    if (!output || !active) return [];
-    const destination = active.destCountry.toUpperCase();
-    return (output.document.normalizedEvidence || []).filter((item) =>
-      item.domain === "CREDIT" && item.countryCode.toUpperCase() === destination
-    );
   }, [active, output]);
   const countryCredit = useMemo<CountryCreditRecord[]>(() => {
     if (!output || !financialEvidence) return [];
@@ -154,8 +146,6 @@ export default function Dashboard() {
     }
     return rows;
   }, [output, financialEvidence]);
-  const assessmentOrigin = financialEvidence?.origin || active?.originCountry?.toUpperCase() || "";
-  const assessmentDestination = financialEvidence?.destination || active?.destCountry?.toUpperCase() || "";
 
   useEffect(() => {
     async function load() {
@@ -263,7 +253,7 @@ export default function Dashboard() {
         {output.document.riskAssessment && <div className="command-profile-grid">
           <article className="command-score"><span>Profile index</span><strong>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100</small></strong><b>{borrowerProfileBand(output.document.riskAssessment.riskBand)}</b></article>
           <article><span>Key indicators</span><div className="command-signal-columns"><div><small>Needs review</small>{attentionDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div><div><small>Supporting</small>{positiveDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div></div></article>
-          <article><span>Evidence readiness</span><strong>{output.document.riskAssessment.confidence.score}%</strong><b>Analytical readiness</b><small>{consistencyScore != null && consistencyScore < 60 ? `Bureau agreement ${consistencyScore}% · review differences` : "Records are substantially complete"}</small></article>
+          <article><span>Information readiness</span><strong>{output.document.riskAssessment.confidence.score}%</strong><b>Analytical readiness</b><small>{consistencyScore != null && consistencyScore < 60 ? `Bureau agreement ${consistencyScore}% · review differences` : "Records are substantially complete"}</small></article>
         </div>}
         {financialEvidence && <section className="command-evidence"><header><span className="eyebrow">FINANCIAL FOOTPRINT</span><button type="button" onClick={() => setDashboardView("financial")}>Review records</button></header><div>
           {[...new Set([financialEvidence.origin, financialEvidence.destination, ...countryCredit.map(row => row.countryCode), ...(output.document.financialEvidenceSummary || []).map(row => row.countryCode)].map(countryCode).filter(Boolean))].map(code => <article key={code}><span className="country-chip">{code}</span><p><b>{countryLabel(code)}</b><small>{countryCredit.filter(row => countryCode(row.countryCode) === code).length} credit records · {(output.document.financialEvidenceSummary || []).some(row => countryCode(row.countryCode) === code) ? "Banking evidence included" : "No published banking evidence"}</small></p></article>)}
@@ -281,48 +271,15 @@ export default function Dashboard() {
               {output.document.coverage.openBankingAvailable && <details className="gcp-country-disclosure" onToggle={event => { const open = event.currentTarget.open; setOpenRecordSections(current => ({...current, banking: open})); }}><summary>Live connected accounts</summary><p>Current account information may differ from the published report.</p>{openRecordSections.banking && <OpenBankingEvidence passportId={output.passportId}/>}</details>}
             </>}
           </>}/>
-          <p className="records-footnote">Missing evidence is not scored as zero. The lender applies its own underwriting policy.</p>
+          <p className="records-footnote">The lender applies its own underwriting policy.</p>
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("score")}>Continue to financial assessment</button></div>
         </div>}
         {dashboardView === "score" && output.document.riskAssessment && <div className="risk-panel">
           <div className="risk-head"><div><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 profile index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : borrowerProfileBand(output.document.riskAssessment.riskBand)}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>analytical readiness</span>{consistencyScore != null && <small>Bureau consistency: {consistencyScore}%{consistencyScore < 60 ? " · review needed" : ""}</small>}</div></div>
-          <div className="risk-factor-table gcp-primary-factors"><div className="risk-factor-header"><span>Assessment factor</span><span>Observed result</span><span>Score</span><span>Evidence source</span></div>{output.document.riskAssessment.dimensions.map((dimension) => { const explanation = output.document.riskAssessment?.dimensionExplanations?.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><span><b>{dimension.label}</b><small>{!dimension.available ? "Not scored" : dimension.score != null && dimension.score < 70 ? "Needs attention" : "Positive indicator"}</small></span><span>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</span><strong>{dimension.score == null ? "—" : `${dimension.score}/100`}</strong><span>{friendlyEvidenceSource(explanation?.sourceProvider, explanation?.sourceCountry, explanation?.evidenceStatus === "SYNTHETIC")}{explanation?.sourceSystem && explanation.sourceDomain === "CREDIT" ? ` · ${friendlyBureauLabel(explanation.sourceSystem)}` : ""}</span></div>; })}</div>
+          <div className="risk-factor-table gcp-primary-factors"><div className="risk-factor-header"><span>What we review</span><span>What your records show</span><span>Indicator</span><span>Source</span></div>{output.document.riskAssessment.dimensions.map((dimension) => { const explanation = output.document.riskAssessment?.dimensionExplanations?.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><span><b>{dimension.key === "DEBT_BURDEN" ? "Observed debt repayments" : dimension.label}</b><small>{!dimension.available ? "Not scored" : dimension.score != null && dimension.score < 70 ? "Needs attention" : "Positive indicator"}</small></span><span>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</span><strong>{dimension.score == null ? "—" : `${dimension.score}/100`}</strong><span>{friendlyEvidenceSource(explanation?.sourceProvider, explanation?.sourceCountry, explanation?.evidenceStatus === "SYNTHETIC")}{explanation?.sourceSystem && explanation.sourceDomain === "CREDIT" ? ` · ${friendlyBureauLabel(explanation.sourceSystem)}` : ""}</span></div>; })}</div>
           <p className="risk-disclosure">Profile index is not a credit score or lending decision. Missing factors are excluded.</p>
-          <details className="explainability-panel organized-explainability" onToggle={(event) => { const open = event.currentTarget.open; setShowAssessmentDetails(open); }}>
-            <summary>Evidence and methodology</summary>
-            {showAssessmentDetails && <div className="explainability-content">
-          {destinationCreditEvidence.length > 0 && output.document.riskAssessment.assessmentEvidence?.countryCode.toUpperCase() !== destinationCreditEvidence[0].countryCode.toUpperCase() && <div className="assessment-evidence-banner"><div><span className="eyebrow">OTHER CREDIT RECORDS</span><b>{destinationCreditEvidence.map((item) => `${friendlyBureauLabel(item.sourceSystem)} ${evidenceNativeScore(item)?.value ?? "—"}`).join(" · ")}</b><p>These destination-country records remain supporting evidence because provider-supplied records rank above synthetic test data. Native bureau scores remain separate and are not averaged.</p></div><small>{Math.max(...destinationCreditEvidence.map((item) => item.completenessPercent))}% complete</small></div>}
-              {output.document.riskAssessment.assessmentEvidence && <div className="assessment-evidence-banner"><div><span className="eyebrow">PRIMARY CREDIT RECORD</span><b>{countryLabel(output.document.riskAssessment.assessmentEvidence.countryCode)} · {friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} structured record</b><p>{output.document.riskAssessment.assessmentEvidence.countryCode.toUpperCase() === assessmentOrigin && destinationCreditEvidence.length > 0 ? `${countryLabel(assessmentOrigin)} · ${friendlyBureauLabel(output.document.riskAssessment.assessmentEvidence.sourceSystem)} was selected because provider-supplied evidence ranks above synthetic records. The available ${countryLabel(assessmentDestination)} bureau records contain synthetic test data and remain supporting evidence.` : "This is the primary eligible record. If it lacks a required metric, that factor uses the explicitly identified fallback source shown in the table."}</p></div><small>{output.document.riskAssessment.assessmentEvidence.completenessPercent}% complete</small></div>}
-              {assessmentExplanations.some((item) => ["DEBT_BURDEN", "CASHFLOW_CAPACITY", "INCOME_STABILITY"].includes(item.dimensionKey) && item.sourceCountry?.toUpperCase() === assessmentDestination) && <div className="assessment-interpretation"><b>Affordability evidence scope</b><p>Debt burden and cash-flow factors currently reflect {countryLabel(assessmentDestination)} account activity. Continuing {countryLabel(assessmentOrigin)} obligations are reviewed separately and are not combined across currencies without an auditable conversion.</p></div>}
-              <section>
-                <span className="eyebrow">PROFILE INDEX</span>
-                <h4>How the profile index was calculated</h4>
-                {output.document.riskAssessment.calculationTrace && output.document.riskAssessment.calculationTrace.availableConfiguredWeight > 0 && output.document.riskAssessment.riskIndex != null ? <>
-                  <details className="technical-methodology"><summary>View calculation and weights</summary><div className="technical-methodology-content"><div className="formula-box">
-                    <code>({output.document.riskAssessment.dimensions.filter((item) => item.available).map((item) => `${item.score} × ${item.configuredWeight}`).join(" + ")}) ÷ {output.document.riskAssessment.calculationTrace.availableConfiguredWeight} = {output.document.riskAssessment.riskIndex}</code>
-                    <small>{output.document.riskAssessment.calculationTrace.availableConfiguredWeight} of {output.document.riskAssessment.calculationTrace.totalConfiguredWeight} configured weight was usable. Missing dimensions were excluded.</small>
-                  </div>
-                  <div className="audit-dimension-list">{output.document.riskAssessment.dimensions.map((item) => <div key={item.key}><span><b>{item.label}</b><small>{item.available ? `${item.score}/100 · ${item.configuredWeight}% weight` : `${item.configuredWeight}% weight · excluded: ${reasonLabel(item.reasonCodes[0])}`}</small></span><em>{item.available ? "Included" : "Excluded"}</em></div>)}</div>
-                  </div></details>
-                  {Boolean(output.document.riskAssessment.dimensionExplanations?.length) && <details className="technical-methodology"><summary>View scoring thresholds</summary><div className="threshold-summary-list">{output.document.riskAssessment.dimensionExplanations?.map((item) => <div key={item.dimensionKey}><b>{reasonLabel(item.dimensionKey)}</b><span>{item.scoringRule}</span></div>)}</div></details>}
-                  {output.document.riskAssessment.crossBorderContext && <details className="technical-methodology"><summary>View cross-border interpretation</summary><div className="cross-border-context"><p>{output.document.riskAssessment.crossBorderContext.currencyTreatment}</p><p>{output.document.riskAssessment.crossBorderContext.destinationPolicyTreatment}</p></div></details>}
-                </> : output.document.riskAssessment.calculationTrace ? <div className="formula-box"><b>No scorable dimensions are currently available.</b><small>Connected evidence did not contain the structured metrics required by the current rules. No risk index was calculated.</small></div> : <p className="audit-muted">This legacy output predates the calculation trace. Regenerate the passport to create a current audit record.</p>}
-              </section>
-              <details className="technical-methodology evidence-readiness-details">
-                <summary>View evidence-quality details</summary>
-                <div className="technical-methodology-content"><h4>{output.document.riskAssessment.confidence.score}% evidence readiness</h4>
-                <div className="confidence-components">
-                  {[ ["Evidence coverage", output.document.riskAssessment.confidence.coverageComponent], ["Completeness", output.document.riskAssessment.confidence.completenessComponent], ["Freshness", output.document.riskAssessment.confidence.freshnessComponent], ["Consistency", output.document.riskAssessment.confidence.consistencyComponent], ["Identity assurance", output.document.riskAssessment.confidence.identityAssuranceComponent], ["Analytical availability", output.document.riskAssessment.confidence.analyticalAvailabilityComponent] ].map(([label, value]) => <div key={String(label)}><span>{label}</span><b>{value}%</b></div>)}
-                </div>
-                {consistencyScore != null && consistencyScore < 60 && <p className="consistency-warning"><b>Source-country bureau differences identified.</b> Material differences were identified across the source-country bureau records.</p>}
-                <p className="audit-muted">Evidence readiness describes the completeness and usability of the supporting information. It does not raise or lower the profile index.</p>
-                {output.document.riskAssessment.dimensionExplanations?.some((item) => item.evidenceStatus === "SYNTHETIC") && <p className="confidence-explanation">Confidence is limited to medium because simulated evidence contributes to this pilot assessment.</p>}
-                {output.document.riskAssessment.confidence.identityAssuranceComponent < 50 && <p className="confidence-explanation">Confidence is currently limited to medium because identity verification uses a pilot sandbox result rather than a live verified result.</p>}
-                </div>
-              </details>
-              <p className="borrower-audit-note">Your detailed evidence provenance and audit record are securely retained with this passport and are not displayed here.</p>
-            </div>}
-          </details>
+          <AssessmentEvidenceNotice evidence={output.document.financialEvidenceSummary} publishedAt={output.createdAt} testEvidence={testEvidence}/>
+          <details className="technical-methodology"><summary>How to understand your profile</summary><div className="technical-methodology-content"><p>Your profile index summarizes the financial information available for this application. It is not a credit score or a loan decision.</p><p>Reported late payments and high use of available credit may need attention. Review your country records and correct inaccurate information with the relevant provider.</p><p>Only available, eligible factors contribute. Missing information is not scored as zero. Credit scores stay in their original scales.</p><p>Information readiness describes how much usable information we have, not whether it has been independently verified.</p></div></details>
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("sharing")}>{currentApplication ? "Review lender activity" : "Continue to sharing & history"}</button></div>
         </div>}
       </section>}
