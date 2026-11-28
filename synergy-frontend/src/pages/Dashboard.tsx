@@ -7,6 +7,8 @@ import PassportSharing from "../components/PassportSharing";
 import OpenBankingEvidence from "../components/OpenBankingEvidence";
 import CrossBorderFinancialProfile from "../components/CrossBorderFinancialProfile";
 import AssessmentEvidenceNotice from "../components/AssessmentEvidenceNotice";
+import { borrowerFactorGroup, borrowerFactorLabel } from "../lib/borrowerAssessment";
+import "../components/BorrowerAssessment.css";
 import { countryCode } from "../lib/countryRecords";
 import type { CountryCreditRecord } from "../lib/countryRecords";
 import { friendlyBureauLabel, friendlyEvidenceSource, friendlyObservedValue } from "../lib/evidenceLabels";
@@ -53,11 +55,11 @@ function countryLabel(code?: string) {
 
 function borrowerProfileBand(value?: string | null) {
   const labels: Record<string, string> = {
-    LOW_RISK: "Strong observed profile",
-    MODERATE_LOW_RISK: "Mixed observed profile",
-    MODERATE_RISK: "Developing observed profile",
-    MODERATE_HIGH_RISK: "Observed profile needs attention",
-    HIGH_RISK: "Observed profile needs attention",
+    LOW_RISK: "Strong financial profile",
+    MODERATE_LOW_RISK: "Mixed financial profile",
+    MODERATE_RISK: "Developing financial profile",
+    MODERATE_HIGH_RISK: "Financial profile needs attention",
+    HIGH_RISK: "Financial profile needs attention",
   };
   return value ? labels[value] || value.replaceAll("_", " ").toLowerCase() : "Not enough evidence";
 }
@@ -126,8 +128,8 @@ export default function Dashboard() {
   const currentApplication = useMemo(() => shares.find((share) => share.status === "ACTIVE") || null, [shares]);
   const latestLenderAccess = useMemo(() => shares[0] || null, [shares]);
   const assessmentDimensions = output?.document.riskAssessment?.dimensions || [];
-  const positiveDimensions = assessmentDimensions.filter((item) => item.available && item.score != null && item.score >= 70).slice(0, 4);
-  const attentionDimensions = assessmentDimensions.filter((item) => item.available && item.score != null && item.score < 70).slice(0, 3);
+  const positiveDimensions = assessmentDimensions.filter(item => borrowerFactorGroup(item) === "supporting").slice(0, 4);
+  const attentionDimensions = assessmentDimensions.filter(item => borrowerFactorGroup(item) === "attention").slice(0, 3);
   const consistencyScore = output?.document.riskAssessment?.confidence.consistencyComponent;
   const financialEvidence = useMemo(() => {
     if (!output || !active) return null;
@@ -188,7 +190,7 @@ export default function Dashboard() {
   const viewHeading = {
     overview: { eyebrow: "HOME", title: "Overview", description: "Your application and next steps." },
     financial: { eyebrow: "RECORDS", title: "Financial records", description: "Credit and banking history by country." },
-    score: { eyebrow: "ASSESSMENT", title: "Assessment", description: "What contributes to your profile index." },
+    score: { eyebrow: "ASSESSMENT", title: "Assessment", description: "Understand what your financial records show." },
     sharing: { eyebrow: "SHARING & HISTORY", title: "Lender access", description: "Share your profile, complete lender requests and review previous access." },
   }[dashboardView];
 
@@ -252,8 +254,8 @@ export default function Dashboard() {
         </section>
         {output.document.riskAssessment && <div className="command-profile-grid">
           <article className="command-score"><span>Profile index</span><strong>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100</small></strong><b>{borrowerProfileBand(output.document.riskAssessment.riskBand)}</b></article>
-          <article><span>Key indicators</span><div className="command-signal-columns"><div><small>Needs review</small>{attentionDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div><div><small>Supporting</small>{positiveDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{dimension.label}</b>)}</div></div></article>
-          <article><span>Information readiness</span><strong>{output.document.riskAssessment.confidence.score}%</strong><b>Analytical readiness</b><small>{consistencyScore != null && consistencyScore < 60 ? `Bureau agreement ${consistencyScore}% · review differences` : "Records are substantially complete"}</small></article>
+          <article><span>Key indicators</span><div className="command-signal-columns"><div><small>Needs review</small>{attentionDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{borrowerFactorLabel(dimension.key === "DEBT_BURDEN" ? "Observed debt repayments" : dimension.label)}</b>)}</div><div><small>Supporting</small>{positiveDimensions.slice(0, 2).map((dimension) => <b key={dimension.key}>{borrowerFactorLabel(dimension.key === "DEBT_BURDEN" ? "Observed debt repayments" : dimension.label)}</b>)}</div></div></article>
+          <article><span>Information readiness</span><strong>{output.document.riskAssessment.confidence.score}%</strong><b>Usable information, not verification</b><small>{consistencyScore == null ? "Credit report agreement unavailable" : consistencyScore < 60 ? `Credit reports differ · ${consistencyScore}% agreement` : `Credit report agreement: ${consistencyScore}%`}</small></article>
         </div>}
         {financialEvidence && <section className="command-evidence"><header><span className="eyebrow">FINANCIAL FOOTPRINT</span><button type="button" onClick={() => setDashboardView("financial")}>Review records</button></header><div>
           {[...new Set([financialEvidence.origin, financialEvidence.destination, ...countryCredit.map(row => row.countryCode), ...(output.document.financialEvidenceSummary || []).map(row => row.countryCode)].map(countryCode).filter(Boolean))].map(code => <article key={code}><span className="country-chip">{code}</span><p><b>{countryLabel(code)}</b><small>{countryCredit.filter(row => countryCode(row.countryCode) === code).length} credit records · {(output.document.financialEvidenceSummary || []).some(row => countryCode(row.countryCode) === code) ? "Banking evidence included" : "No published banking evidence"}</small></p></article>)}
@@ -275,11 +277,32 @@ export default function Dashboard() {
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("score")}>Continue to financial assessment</button></div>
         </div>}
         {dashboardView === "score" && output.document.riskAssessment && <div className="risk-panel">
-          <div className="risk-head"><div><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 profile index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : borrowerProfileBand(output.document.riskAssessment.riskBand)}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>analytical readiness</span>{consistencyScore != null && <small>Bureau consistency: {consistencyScore}%{consistencyScore < 60 ? " · review needed" : ""}</small>}</div></div>
-          <div className="risk-factor-table gcp-primary-factors"><div className="risk-factor-header"><span>What we review</span><span>What your records show</span><span>Indicator</span><span>Source</span></div>{output.document.riskAssessment.dimensions.map((dimension) => { const explanation = output.document.riskAssessment?.dimensionExplanations?.find((item) => item.dimensionKey === dimension.key); return <div key={dimension.key}><span><b>{dimension.key === "DEBT_BURDEN" ? "Observed debt repayments" : dimension.label}</b><small>{!dimension.available ? "Not scored" : dimension.score != null && dimension.score < 70 ? "Needs attention" : "Positive indicator"}</small></span><span>{explanation ? friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit) : reasonLabel(dimension.reasonCodes[0])}</span><strong>{dimension.score == null ? "—" : `${dimension.score}/100`}</strong><span>{friendlyEvidenceSource(explanation?.sourceProvider, explanation?.sourceCountry, explanation?.evidenceStatus === "SYNTHETIC")}{explanation?.sourceSystem && explanation.sourceDomain === "CREDIT" ? ` · ${friendlyBureauLabel(explanation.sourceSystem)}` : ""}</span></div>; })}</div>
-          <p className="risk-disclosure">Profile index is not a credit score or lending decision. Missing factors are excluded.</p>
-          <AssessmentEvidenceNotice evidence={output.document.financialEvidenceSummary} publishedAt={output.createdAt} testEvidence={testEvidence}/>
-          <details className="technical-methodology"><summary>How to understand your profile</summary><div className="technical-methodology-content"><p>Your profile index summarizes the financial information available for this application. It is not a credit score or a loan decision.</p><p>Reported late payments and high use of available credit may need attention. Review your country records and correct inaccurate information with the relevant provider.</p><p>Only available, eligible factors contribute. Missing information is not scored as zero. Credit scores stay in their original scales.</p><p>Information readiness describes how much usable information we have, not whether it has been independently verified.</p></div></details>
+          <div className="risk-head"><div><h3>{output.document.riskAssessment.riskIndex ?? "—"}<small>/100 profile index</small></h3><p>{output.document.riskAssessment.riskIndex == null ? "Insufficient evidence to calculate" : borrowerProfileBand(output.document.riskAssessment.riskBand)}</p></div><div className="confidence-score"><b>{output.document.riskAssessment.confidence.score}%</b><span>Information readiness</span>{consistencyScore != null && <small>Credit report agreement: {consistencyScore}%{consistencyScore < 60 ? " · review differences" : ""}</small>}</div></div>
+          <div className="borrower-assessment-groups">
+            {([{ key: "attention", title: "Areas to pay attention to" }, { key: "supporting", title: "Positive financial indicators" }, { key: "missing", title: "Information not available for assessment" }] as const).map(group => {
+              const factors = assessmentDimensions.filter(dimension => borrowerFactorGroup(dimension) === group.key);
+              if (!factors.length) return null;
+              return <section key={group.key} className={`borrower-assessment-group ${group.key}`}>
+                <h4>{group.title}</h4>
+                {factors.map(dimension => {
+                  const explanation = output.document.riskAssessment?.dimensionExplanations?.find(item => item.dimensionKey === dimension.key);
+                  const metric = explanation?.standardizedMetric;
+                  const observed = explanation && explanation.observedValue != null
+                    ? metric === "credit.recent_enquiries" ? `${explanation.observedValue} recent credit ${Number(explanation.observedValue) === 1 ? "check" : "checks"}`
+                    : friendlyObservedValue(explanation.standardizedMetric, explanation.observedValue, explanation.unit)
+                    : "Not enough information to describe this factor";
+                  return <div className="borrower-assessment-row" key={dimension.key}>
+                    <div><b>{borrowerFactorLabel(dimension.key === "DEBT_BURDEN" ? "Observed debt repayments" : dimension.label)}</b><small>{friendlyEvidenceSource(explanation?.sourceProvider, explanation?.sourceCountry, explanation?.evidenceStatus === "SYNTHETIC")}{explanation?.sourceSystem && explanation.sourceDomain === "CREDIT" ? ` · ${friendlyBureauLabel(explanation.sourceSystem)}` : ""}</small></div>
+                    <span>{group.key === "missing" ? "Not included in your profile index" : observed}</span>
+                  </div>;
+                })}
+              </section>;
+            })}
+            {!assessmentDimensions.length && <p>No assessment factors are available yet.</p>}
+          </div>
+          <p className="risk-disclosure">Your profile index summarizes available financial information. It is not a credit score or a loan decision. Missing information is not scored as zero.</p>
+          <AssessmentEvidenceNotice evidence={output.document.financialEvidenceSummary} publishedAt={output.createdAt} testEvidence={testEvidence} borrower/>
+          <details className="technical-methodology"><summary>How to understand your profile</summary><div className="technical-methodology-content"><p>Review your country records and contact the relevant provider if information is inaccurate. Original credit scores keep their own scales.</p><p>Positive indicators describe only the records analyzed. They do not establish that you can afford a loan.</p></div></details>
           <div className="tab-next-action"><button type="button" onClick={() => setDashboardView("sharing")}>{currentApplication ? "Review lender activity" : "Continue to sharing & history"}</button></div>
         </div>}
       </section>}
